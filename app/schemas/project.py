@@ -1,29 +1,16 @@
+from pydantic import BaseModel
 from datetime import datetime
+from typing import Optional
 
-from pydantic import BaseModel, ConfigDict
-
-
-class ProjectBase(BaseModel):
+class ProjectCreate(BaseModel):
     name: str
-    description: str | None = None
+    description: Optional[str] = None
 
-
-class ProjectCreate(ProjectBase):
-    pass
-
-
-class ProjectUpdate(BaseModel):
-    name: str | None = None
-    description: str | None = None
-
-
-class ProjectOut(ProjectBase):
-    model_config = ConfigDict(from_attributes=True)
-
+class ProjectOut(BaseModel):
     id: int
-    created_by: int
+    name: str
+    description: Optional[str] = None
     created_at: datetime
 
-
-# Alias in case anything imports it under this name instead
-ProjectResponse = ProjectOut
+    class Config:
+        from_attributes = True

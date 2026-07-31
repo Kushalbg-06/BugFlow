@@ -1,15 +1,13 @@
 from pydantic import BaseModel
 from datetime import datetime
 
-class CommentCreate(BaseModel):
-    content: str
-
-class CommentOut(BaseModel):
+class ActivityOut(BaseModel):
     id: int
     issue_id: int
-    author_id: int
-    author_username: str
-    content: str
+    user_id: int
+    username: str
+    action: str
+    detail: str | None = None
     created_at: datetime
 
     class Config:

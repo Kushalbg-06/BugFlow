@@ -1,45 +1,58 @@
-from enum import Enum
-
-from pydantic import BaseModel, ConfigDict
-
-
-class IssueStatus(str, Enum):
-    OPEN = "OPEN"
-    IN_PROGRESS = "IN_PROGRESS"
-    RESOLVED = "RESOLVED"
-
-
-class IssueSeverity(str, Enum):
-    LOW = "LOW"
-    MEDIUM = "MEDIUM"
-    HIGH = "HIGH"
-    CRITICAL = "CRITICAL"
-
+from pydantic import BaseModel
+from datetime import datetime
+from typing import Optional
+from app.models.issue import IssuePriority, IssueStatus
 
 class IssueCreate(BaseModel):
     title: str
     description: str
-    severity: IssueSeverity = IssueSeverity.MEDIUM
+    priority: IssuePriority = IssuePriority.MEDIUM
     project_id: int
-    assigned_to: int | None = None
-
+    sprint_id: Optional[int] = None
+    assignee_id: Optional[int] = None
+    generate_report: bool = True
 
 class IssueUpdate(BaseModel):
-    title: str | None = None
-    description: str | None = None
-    status: IssueStatus | None = None
-    severity: IssueSeverity | None = None
-    assigned_to: int | None = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    priority: Optional[IssuePriority] = None
+    status: Optional[IssueStatus] = None
+    sprint_id: Optional[int] = None
+    assignee_id: Optional[int] = None
 
-
-class IssueResponse(BaseModel):
+class IssueOut(BaseModel):
     id: int
     title: str
     description: str
+    priority: IssuePriority
     status: IssueStatus
-    severity: IssueSeverity
+    category: Optional[str] = None
+    ai_steps_to_reproduce: Optional[str] = None
+    ai_expected_result: Optional[str] = None
+    ai_actual_result: Optional[str] = None
     project_id: int
+    sprint_id: Optional[int] = None
     reporter_id: int
-    assigned_to: int | None
+    assignee_id: Optional[int] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    class Config:
+        from_attributes = True
+
+class PrioritySuggestRequest(BaseModel):
+    title: str
+    description: str
+
+class DuplicateCheckRequest(BaseModel):
+    title: str
+    description: str
+    project_id: int
+
+class DuplicateMatch(BaseModel):
+    issue_id: int
+    title: str
+    similarity: float
+
+class PrioritySuggestion(BaseModel):
+    suggested_priority: IssuePriority

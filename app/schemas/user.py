@@ -1,26 +1,23 @@
-from enum import Enum
-
-from pydantic import BaseModel, EmailStr, ConfigDict
-
-
-class UserRole(str, Enum):
-    ADMIN = "ADMIN"
-    DEVELOPER = "DEVELOPER"
-    QA = "QA"
-    REPORTER = "REPORTER"
-
+from pydantic import BaseModel, EmailStr
+from datetime import datetime
+from app.models.user import UserRole
 
 class UserCreate(BaseModel):
-    full_name: str
+    username: str
     email: EmailStr
     password: str
     role: UserRole = UserRole.REPORTER
 
-
-class UserResponse(BaseModel):
+class UserOut(BaseModel):
     id: int
-    full_name: str
+    username: str
     email: EmailStr
     role: UserRole
+    created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    class Config:
+        from_attributes = True
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
