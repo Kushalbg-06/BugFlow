@@ -1,60 +1,47 @@
 import enum
-from datetime import datetime, timezone
-
-from sqlalchemy import String, Text, DateTime, ForeignKey, Enum as SAEnum
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-
+from sqlalchemy import Column, Integer, String, Text, Enum, DateTime, ForeignKey
+from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 from app.core.database import Base
 
+class IssuePriority(str, enum.Enum):
+    CRITICAL = "critical"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
 
 class IssueStatus(str, enum.Enum):
     OPEN = "open"
     IN_PROGRESS = "in_progress"
     IN_REVIEW = "in_review"
     RESOLVED = "resolved"
-    CLOSED = "closed"
-
-
-class IssueSeverity(str, enum.Enum):
-    CRITICAL = "critical"
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
-
-
-# Allowed forward transitions for the workflow state machine.
-VALID_TRANSITIONS: dict[IssueStatus, set[IssueStatus]] = {
-    IssueStatus.OPEN: {IssueStatus.IN_PROGRESS, IssueStatus.CLOSED},
-    IssueStatus.IN_PROGRESS: {IssueStatus.IN_REVIEW, IssueStatus.OPEN, IssueStatus.CLOSED},
-    IssueStatus.IN_REVIEW: {IssueStatus.RESOLVED, IssueStatus.IN_PROGRESS, IssueStatus.CLOSED},
-    IssueStatus.RESOLVED: {IssueStatus.CLOSED, IssueStatus.IN_PROGRESS},
-    IssueStatus.CLOSED: {IssueStatus.OPEN},  # reopen
-}
-
 
 class Issue(Base):
     __tablename__ = "issues"
 
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    title: Mapped[str] = mapped_column(String(200), nullable=False)
-    description: Mapped[str] = mapped_column(Text, nullable=False)
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(200), nullable=False)
+    description = Column(Text, nullable=False)
+    priority = Column(Enum(IssuePriority), default=IssuePriority.MEDIUM, nullable=False)
+    status = Column(Enum(IssueStatus), default=IssueStatus.OPEN, nullable=False)
+    category = Column(String(50), nullable=True)
 
-    status: Mapped[IssueStatus] = mapped_column(SAEnum(IssueStatus), default=IssueStatus.OPEN, nullable=False)
-    severity: Mapped[IssueSeverity] = mapped_column(SAEnum(IssueSeverity), default=IssueSeverity.MEDIUM, nullable=False)
+    ai_steps_to_reproduce = Column(Text, nullable=True)
+    ai_expected_result = Column(Text, nullable=True)
+    ai_actual_result = Column(Text, nullable=True)
 
-    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), nullable=False)
-    reporter_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    assignee_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
-    sprint_id: Mapped[int | None] = mapped_column(ForeignKey("sprints.id"), nullable=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    sprint_id = Column(Integer, ForeignKey("sprints.id"), nullable=True)
+    reporter_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    assignee_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
-    )
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     project = relationship("Project", back_populates="issues")
-    reporter = relationship("User", foreign_keys=[reporter_id], back_populates="reported_issues")
-    assignee = relationship("User", foreign_keys=[assignee_id], back_populates="assigned_issues")
     sprint = relationship("Sprint", back_populates="issues")
+    reporter = relationship("User", back_populates="issues_reported", foreign_keys=[reporter_id])
+    assignee = relationship("User", back_populates="issues_assigned", foreign_keys=[assignee_id])
     comments = relationship("Comment", back_populates="issue", cascade="all, delete-orphan")
-    activities = relationship("Activity", back_populates="issue", cascade="all, delete-orphan")
+    attachments = relationship("Attachment", back_populates="issue", cascade="all, delete-orphan")
+    activity_logs = relationship("ActivityLog", back_populates="issue", cascade="all, delete-orphan")
