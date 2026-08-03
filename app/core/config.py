@@ -1,25 +1,23 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+import os
+from dotenv import load_dotenv
 
+load_dotenv()
 
-class Settings(BaseSettings):
-    """
-    Central application configuration.
-    Values are loaded from environment variables / .env file.
-    """
-    APP_NAME: str = "BugFlow"
-    DEBUG: bool = True
-
-    DATABASE_URL: str = "sqlite:///./bugflow.db"
-
-    SECRET_KEY: str = "change-this-to-a-long-random-secret-in-production"
+class Settings:
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./bugflow.db")
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "dev-secret-change-me")
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60))
 
-    AI_PROVIDER: str = "gemini"  # "gemini" or "openai"
-    GEMINI_API_KEY: str | None = None
-    OPENAI_API_KEY: str | None = None
+    AI_PROVIDER: str = os.getenv("AI_PROVIDER", "").lower()
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
+    ANTHROPIC_MODEL: str = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")
 
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
 
 settings = Settings()
