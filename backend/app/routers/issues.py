@@ -1,105 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-
-from app.core.database import get_db
-from app.models.issue import Issue
-from app.schemas.issue import (
-    IssueCreate,
-    IssueUpdate,
-    IssueResponse,
-)
-
-router = APIRouter()
-
-
-@router.post("/", response_model=IssueResponse, status_code=status.HTTP_201_CREATED)
-def create_issue(issue: IssueCreate, db: Session = Depends(get_db)):
-    new_issue = Issue(
-        title=issue.title,
-        description=issue.description,
-        severity=issue.severity,
-        project_id=issue.project_id,
-        assigned_to=issue.assigned_to,
-    )
-
-    db.add(new_issue)
-    db.commit()
-    db.refresh(new_issue)
-
-    return new_issue
-
-
-@router.get("/", response_model=list[IssueResponse])
-def get_issues(db: Session = Depends(get_db)):
-    return db.query(Issue).all()
-
-
-@router.get("/{issue_id}", response_model=IssueResponse)
-def get_issue(issue_id: int, db: Session = Depends(get_db)):
-    issue = db.query(Issue).filter(Issue.id == issue_id).first()
-
-    if not issue:
-        raise HTTPException(
-            status_code=404,
-            detail="Issue not found"
-        )
-
-    return issue
-
-
-@router.put("/{issue_id}", response_model=IssueResponse)
-def update_issue(
-    issue_id: int,
-    issue_data: IssueUpdate,
-    db: Session = Depends(get_db),
-):
-    issue = db.query(Issue).filter(Issue.id == issue_id).first()
-
-    if not issue:
-        raise HTTPException(
-            status_code=404,
-            detail="Issue not found"
-        )
-
-    update_data = issue_data.model_dump(exclude_unset=True)
-
-    for key, value in update_data.items():
-        setattr(issue, key, value)
-
-    db.commit()
-    db.refresh(issue)
-
-    return issue
-
-
-@router.delete("/{issue_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_issue(issue_id: int, db: Session = Depends(get_db)):
-    issue = db.query(Issue).filter(Issue.id == issue_id).first()
-
-    if not issue:
-        raise HTTPException(
-            status_code=404,
-            detail="Issue not found"
-        )
-
-    db.delete(issue)
-    db.commit()
-
-    return Nonefrom fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.state_machine import is_valid_transition
-from app.ai.report_generator import generate_report
+from app.ai.report_generator import generate_report, AIReportError
 from app.ai.triage import suggest_priority
 from app.ai.duplicates import find_possible_duplicates
-from app.services.activity import log_activity
 from app.models.issue import Issue, IssueStatus
 from app.models.project import Project
 from app.models.sprint import Sprint
 from app.models.user import User, UserRole
-from app.schemas.issue import IssueCreate, IssueUpdate, IssueOut, DuplicateCheckRequest, DuplicateMatch, PrioritySuggestion, PrioritySuggestRequest
+from app.schemas.issue import IssueCreate, IssueUpdate, IssueOut, DuplicateCheckRequest, DuplicateMatch, PrioritySuggestion, PrioritySuggestRequest, ReportPreview
 
 router = APIRouter(prefix="/issues", tags=["issues"])
 
@@ -126,6 +38,7 @@ def create_issue(payload: IssueCreate, db: Session = Depends(get_db), current_us
     issue = Issue(
         title=payload.title,
         description=payload.description,
+        severity=payload.severity,
         priority=payload.priority,
         project_id=payload.project_id,
         sprint_id=payload.sprint_id,
@@ -134,12 +47,18 @@ def create_issue(payload: IssueCreate, db: Session = Depends(get_db), current_us
     )
 
     if payload.generate_report:
-        report = generate_report(payload.title, payload.description)
+        try:
+            report = generate_report(payload.title, payload.description)
+        except AIReportError as exc:
+            raise HTTPException(status_code=502, detail=str(exc))
         issue.category = report["category"]
+        issue.ai_summary = report["ai_summary"]
         issue.ai_steps_to_reproduce = report["ai_steps_to_reproduce"]
         issue.ai_expected_result = report["ai_expected_result"]
         issue.ai_actual_result = report["ai_actual_result"]
-
+        issue.ai_environment = report["ai_environment"]
+        issue.ai_root_cause = report["ai_root_cause"]
+       
     db.add(issue)
     db.flush()
     log_activity(db, issue.id, current_user.id, "created", f"Issue reported with priority {issue.priority.value}")
@@ -152,11 +71,18 @@ def generate_issue_report(issue_id: int, db: Session = Depends(get_db), current_
     issue = db.query(Issue).filter(Issue.id == issue_id).first()
     if not issue:
         raise HTTPException(status_code=404, detail="Issue not found")
-    report = generate_report(issue.title, issue.description)
+    try:
+        report = generate_report(issue.title, issue.description)
+    except AIReportError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
     issue.category = report["category"]
+    issue.ai_summary = report["ai_summary"]
     issue.ai_steps_to_reproduce = report["ai_steps_to_reproduce"]
     issue.ai_expected_result = report["ai_expected_result"]
     issue.ai_actual_result = report["ai_actual_result"]
+    issue.ai_environment = report["ai_environment"]
+    issue.ai_root_cause = report["ai_root_cause"]
+    
     log_activity(db, issue.id, current_user.id, "ai_report_regenerated", None)
     db.commit()
     db.refresh(issue)
@@ -238,3 +164,21 @@ def delete_issue(
         raise HTTPException(status_code=404, detail="Issue not found")
     db.delete(issue)
     db.commit()
+
+@router.post("/preview-report", response_model=ReportPreview)
+def preview_report(payload: PrioritySuggestRequest, current_user: User = Depends(get_current_user)):
+    """Generate an AI report from a title/description without saving an issue.
+    Used by the Create Issue form to expand a short description before submission."""
+    try:
+        report = generate_report(payload.title, payload.description)
+    except AIReportError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    return ReportPreview(
+        category=report["category"],
+        summary=report["ai_summary"],
+        steps_to_reproduce=report["ai_steps_to_reproduce"],
+        expected_result=report["ai_expected_result"],
+        actual_result=report["ai_actual_result"],
+        environment=report["ai_environment"],
+        root_cause=report["ai_root_cause"],
+    )
