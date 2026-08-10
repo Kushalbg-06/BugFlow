@@ -1,11 +1,12 @@
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
-from app.models.issue import IssuePriority, IssueStatus
+from app.models.issue import IssuePriority, IssueSeverity, IssueStatus
 
 class IssueCreate(BaseModel):
     title: str
     description: str
+    severity: IssueSeverity = IssueSeverity.MEDIUM
     priority: IssuePriority = IssuePriority.MEDIUM
     project_id: int
     sprint_id: Optional[int] = None
@@ -15,6 +16,7 @@ class IssueCreate(BaseModel):
 class IssueUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
+    severity: Optional[IssueSeverity] = None
     priority: Optional[IssuePriority] = None
     status: Optional[IssueStatus] = None
     sprint_id: Optional[int] = None
@@ -24,12 +26,16 @@ class IssueOut(BaseModel):
     id: int
     title: str
     description: str
+    severity: IssueSeverity
     priority: IssuePriority
     status: IssueStatus
     category: Optional[str] = None
+    ai_summary: Optional[str] = None
     ai_steps_to_reproduce: Optional[str] = None
     ai_expected_result: Optional[str] = None
     ai_actual_result: Optional[str] = None
+    ai_environment: Optional[str] = None
+    ai_root_cause: Optional[str] = None
     project_id: int
     sprint_id: Optional[int] = None
     reporter_id: int
@@ -56,3 +62,12 @@ class DuplicateMatch(BaseModel):
 
 class PrioritySuggestion(BaseModel):
     suggested_priority: IssuePriority
+
+class ReportPreview(BaseModel):
+    category: str
+    summary: str
+    steps_to_reproduce: str
+    expected_result: str
+    actual_result: str
+    environment: str
+    root_cause: str
