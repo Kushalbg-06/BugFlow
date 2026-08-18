@@ -40,3 +40,33 @@ def create_comment(issue_id: int, payload: CommentCreate, db: Session = Depends(
     db.commit()
     db.refresh(comment)
     return _to_out(comment)
+
+
+@router.delete("/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_comment(
+    issue_id: int,
+    comment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete a comment from an issue"""
+    comment = db.query(Comment).filter(
+        Comment.id == comment_id,
+        Comment.issue_id == issue_id
+    ).first()
+    
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    
+    if comment.author_id != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Only the comment author can delete this comment"
+        )
+    
+   
+    db.delete(comment)
+    log_activity(db, issue_id, current_user.id, "comment_deleted", comment.content[:50])
+    db.commit()
+    
+    return None

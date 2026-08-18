@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 from typing import List
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.services.activity import log_activity
 from app.models.issue import Issue
 from app.models.attachment import Attachment
 from app.models.user import User
@@ -66,3 +65,34 @@ def download_attachment(issue_id: int, attachment_id: int, db: Session = Depends
     if not attachment or not os.path.exists(attachment.stored_path):
         raise HTTPException(status_code=404, detail="Attachment not found")
     return FileResponse(attachment.stored_path, filename=attachment.filename, media_type=attachment.content_type)
+
+@router.delete("/{attachment_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_attachment(
+    issue_id: int,
+    attachment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete an attachment from an issue"""
+    attachment = db.query(Attachment).filter(
+        Attachment.id == attachment_id,
+        Attachment.issue_id == issue_id
+    ).first()
+    
+    if not attachment:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    if attachment.uploaded_by != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Only the uploader can delete this attachment"
+        )
+    try:
+        if os.path.exists(attachment.stored_path):
+            os.remove(attachment.stored_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting file: {str(e)}")
+    db.delete(attachment)
+    log_activity(db, issue_id, current_user.id, "attachment_deleted", attachment.filename)
+    db.commit()
+    
+    return None

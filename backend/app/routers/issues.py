@@ -7,11 +7,16 @@ from app.core.state_machine import is_valid_transition
 from app.ai.report_generator import generate_report, AIReportError
 from app.ai.triage import suggest_priority
 from app.ai.duplicates import find_possible_duplicates
+from app.services.activity import log_activity
 from app.models.issue import Issue, IssueStatus
 from app.models.project import Project
 from app.models.sprint import Sprint
 from app.models.user import User, UserRole
 from app.schemas.issue import IssueCreate, IssueUpdate, IssueOut, DuplicateCheckRequest, DuplicateMatch, PrioritySuggestion, PrioritySuggestRequest, ReportPreview
+from app.ai.classifier import suggest_classification
+from app.schemas.issue import ClassificationSuggestion
+from app.ai.resolution import get_resolution_assistance
+from app.schemas.issue import ResolutionAssistance
 
 router = APIRouter(prefix="/issues", tags=["issues"])
 
@@ -44,6 +49,9 @@ def create_issue(payload: IssueCreate, db: Session = Depends(get_db), current_us
         sprint_id=payload.sprint_id,
         assignee_id=payload.assignee_id,
         reporter_id=current_user.id,
+        category=payload.category,
+        component=payload.component,
+        defect_type=payload.defect_type,
     )
 
     if payload.generate_report:
@@ -51,13 +59,23 @@ def create_issue(payload: IssueCreate, db: Session = Depends(get_db), current_us
             report = generate_report(payload.title, payload.description)
         except AIReportError as exc:
             raise HTTPException(status_code=502, detail=str(exc))
-        issue.category = report["category"]
+        if not issue.category:
+            issue.category = report["category"]
         issue.ai_summary = report["ai_summary"]
         issue.ai_steps_to_reproduce = report["ai_steps_to_reproduce"]
         issue.ai_expected_result = report["ai_expected_result"]
         issue.ai_actual_result = report["ai_actual_result"]
         issue.ai_environment = report["ai_environment"]
         issue.ai_root_cause = report["ai_root_cause"]
+
+    if not issue.category or not issue.component or not issue.defect_type:
+        suggestions = suggest_classification(payload.title, payload.description)
+        if not issue.category:
+            issue.category = suggestions["category"]
+        if not issue.component:
+            issue.component = suggestions["module"]
+        if not issue.defect_type:
+            issue.defect_type = suggestions["defect_type"]
        
     db.add(issue)
     db.flush()
@@ -182,3 +200,15 @@ def preview_report(payload: PrioritySuggestRequest, current_user: User = Depends
         environment=report["ai_environment"],
         root_cause=report["ai_root_cause"],
     )
+@router.post("/classify", response_model=ClassificationSuggestion)
+def classify_issue(payload: PrioritySuggestRequest, current_user: User = Depends(get_current_user)):
+    return ClassificationSuggestion(**suggest_classification(payload.title, payload.description))
+
+
+@router.get("/{issue_id}/resolution-assistant", response_model=ResolutionAssistance)
+def resolution_assistant(issue_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    issue = db.query(Issue).filter(Issue.id == issue_id).first()
+    if not issue:
+        raise HTTPException(status_code=404, detail="Issue not found")
+    candidates = db.query(Issue).filter(Issue.project_id == issue.project_id, Issue.id != issue.id).all()
+    return get_resolution_assistance(issue, candidates)

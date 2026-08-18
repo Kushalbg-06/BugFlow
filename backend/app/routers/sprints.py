@@ -6,7 +6,7 @@ from app.core.deps import get_current_user
 from app.models.project import Project
 from app.models.sprint import Sprint
 from app.models.user import User
-from app.schemas.sprint import SprintCreate, SprintOut
+from app.schemas.sprint import SprintCreate, SprintUpdate, SprintOut
 
 router = APIRouter(prefix="/sprints", tags=["sprints"])
 
@@ -26,6 +26,22 @@ def list_sprints(project_id: Optional[int] = None, db: Session = Depends(get_db)
     if project_id:
         query = query.filter(Sprint.project_id == project_id)
     return query.order_by(Sprint.created_at.desc()).all()
+
+@router.put("/{sprint_id}", response_model=SprintOut)
+def update_sprint(sprint_id: int, payload: SprintUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    sprint = db.query(Sprint).filter(Sprint.id == sprint_id).first()
+    if not sprint:
+        raise HTTPException(status_code=404, detail="Sprint not found")
+    if payload.project_id is not None:
+        if not db.query(Project).filter(Project.id == payload.project_id).first():
+            raise HTTPException(status_code=404, detail="Project not found")
+    
+    for key, value in payload.model_dump(exclude_unset=True).items():
+        setattr(sprint, key, value)
+        
+    db.commit()
+    db.refresh(sprint)
+    return sprint
 
 @router.delete("/{sprint_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_sprint(sprint_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
