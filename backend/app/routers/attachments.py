@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from typing import List
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.services.activity import log_activity
 from app.models.issue import Issue
 from app.models.attachment import Attachment
 from app.models.user import User
