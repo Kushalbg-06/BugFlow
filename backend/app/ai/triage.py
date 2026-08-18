@@ -1,5 +1,4 @@
 """
-Milestone 2 Advanced AI Challenge — auto-triage.
 Suggests a priority level from the bug text using keyword heuristics.
 Same "swap this for a real LLM later" pattern as report_generator.py.
 """

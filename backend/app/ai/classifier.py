@@ -35,7 +35,6 @@ if not GROK_API_KEY:
         "GROK_API_KEY is missing from .env"
     )
 
-
 client = OpenAI(
     api_key=GROK_API_KEY,
     base_url=GROK_BASE_URL

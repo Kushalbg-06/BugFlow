@@ -8,6 +8,12 @@ class SprintCreate(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
 
+class SprintUpdate(BaseModel):
+    name: Optional[str] = None
+    project_id: Optional[int] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+
 class SprintOut(BaseModel):
     id: int
     name: str
