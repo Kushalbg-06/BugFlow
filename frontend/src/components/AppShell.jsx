@@ -19,17 +19,21 @@ export default function AppShell({ children }) {
   };
 
   const initial = user?.username ? user.username[0].toUpperCase() : "?";
+  const roleLabel = user?.role ? user.role[0].toUpperCase() + user.role.slice(1) : "";
 
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <div className="sidebar-logo">B</div>
+        <div className="sidebar-logo">
+        <img src="/bugflow-logo.png" alt="BugFlow Logo" />
+        </div>
           <div className="sidebar-brand-text">
             <strong>BugFlow</strong>
             <span>Bug Management</span>
           </div>
         </div>
+
         <nav className="sidebar-nav">
           {NAV_ITEMS.map((item) => (
             <NavLink
@@ -42,22 +46,39 @@ export default function AppShell({ children }) {
             </NavLink>
           ))}
         </nav>
-        <div className="sidebar-footer">
-          <button className="sidebar-link" onClick={handleLogout}>
-            <span className="sidebar-icon">↩</span> Logout
-          </button>
+
+        <div
+          className="sidebar-footer sidebar-profile"
+          onClick={() => navigate("/profile")}
+          style={{ cursor: "pointer" }}
+        >
+          <div className="avatar">{initial}</div>
+          <div className="topbar-user-info">
+            <strong>{user?.username || "..."}</strong>
+            <span>{roleLabel}</span>
+          </div>
+          <span className="sidebar-profile-chevron">›</span>
         </div>
       </aside>
 
       <div className="main-area">
         <header className="topbar">
           <div className="topbar-brand">BugFlow</div>
-          <div className="topbar-user">
-            <div className="topbar-user-info" style={{ textAlign: "right" }}>
-              <strong>{user?.username || "..."}</strong>
-              <span>{user?.role ? user.role[0].toUpperCase() + user.role.slice(1) : ""}</span>
+          <div className="topbar-right">
+            <button className="btn btn-sm" onClick={handleLogout}>
+              ↩ Logout
+            </button>
+            <div
+              className="topbar-user"
+              onClick={() => navigate("/profile")}
+              style={{ cursor: "pointer" }}
+            >
+              <div className="topbar-user-info" style={{ textAlign: "right" }}>
+                <strong>{user?.username || "..."}</strong>
+                <span>{roleLabel}</span>
+              </div>
+              <div className="avatar">{initial}</div>
             </div>
-            <div className="avatar">{initial}</div>
           </div>
         </header>
         {children}
@@ -65,3 +86,4 @@ export default function AppShell({ children }) {
     </div>
   );
 }
+
