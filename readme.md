@@ -1,11 +1,102 @@
-# BugFlow
+BugFlow 🐞
 
-BugFlow is a bug and issue tracking platform built as an 8-week capstone project. It covers the full lifecycle of a bug report — from creation and triage to resolution — with role-based access control and optional AI-assisted features for report generation.
+AI-Powered Software Issue Tracking & Resolution Platform
 
-## Features
+BugFlow is a full-stack platform for reporting, managing, prioritizing, and resolving software issues. It helps developers, QA testers, and project managers collaborate through a structured issue lifecycle.
 
-- **Authentication & Authorization** — JWT-based auth with role support (Admin, Developer, QA, Reporter)
-- **Bug/Issue Lifecycle Management** — create, update, assign, and track issues through their full lifecycle
-- **Workflow Automation** — severity levels, state machine transitions, and sprint organization
-- **AI-Assisted Bug Reporting** — generate structured, professional bug reports (steps to reproduce, expected/actual result, category) from a short title and description using an LLM provider 
+🚀 Project Status
 
+- ✅ Milestone 1 — Foundation
+- ✅ Milestone 2 — Workflow & Collaboration
+- 🔄 Milestone 3 — Analytics & CI/CD
+- 🔄 Milestone 4 — Optimization & Finalization
+
+✨ Features
+
+Milestone 1 — Foundation
+
+- User registration and login
+- JWT authentication
+- Role-based access control
+- Project management
+- Issue CRUD operations
+- Basic bug reporting
+
+Milestone 2 — Workflow & Collaboration
+
+- Issue severity: Critical, High, Medium, Low
+- Issue status workflow:
+  "Open → In Progress → In Review → Resolved"
+- Issue comments
+- Activity history
+- Sprint planning
+- AI-assisted bug report improvement
+- AI-based issue categorization and severity suggestion
+- Duplicate issue detection using semantic similarity
+
+🤖 AI Features
+
+AI Bug Reporting
+
+Helps users convert short or unclear descriptions into structured bug reports.
+
+Intelligent Auto-Triaging
+
+Analyzes issue descriptions and suggests the issue category and severity.
+
+Duplicate Detection
+
+Uses semantic similarity to identify potentially duplicate issues before they are created.
+
+🛠️ Tech Stack
+
+Frontend
+
+- React
+
+Backend
+
+- Python
+- FastAPI
+- SQLAlchemy
+
+Database
+
+- PostgreSQL
+
+Authentication
+
+- JWT
+
+AI
+
+- LLM / NLP
+- Vector Embeddings
+
+🔄 Issue Lifecycle
+
+Report Issue
+     ↓
+Prioritize
+     ↓
+Assign
+     ↓
+In Progress
+     ↓
+In Review
+     ↓
+Resolved
+
+🎯 Project Goal
+
+BugFlow aims to simplify software defect management by combining issue tracking, Agile workflows, team collaboration, and AI-assisted features in one platform.
+
+🔮 Future Scope
+
+- Analytics dashboard
+- Developer workload analytics
+- CI/CD with GitHub Actions
+- GitHub integration
+- AI code review
+- AI fix suggestions
+- Predictive sprint analytics
