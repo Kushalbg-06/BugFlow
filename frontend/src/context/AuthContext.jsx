@@ -1,47 +1,89 @@
-import { createContext, useContext, useEffect, useState } from "react";
-import api from "../api";
+import { createContext, useContext, useState, useEffect } from "react";
 
-const AuthContext = createContext(null);
+const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(localStorage.getItem("bugflow_token"));
   const [user, setUser] = useState(null);
+  const [role, setRole] = useState(null);
+  const [loading, setLoading] = useState(true);
+
 
   useEffect(() => {
-    if (!token) {
-      setUser(null);
-      return;
+    const savedUser = localStorage.getItem("user");
+    const savedRole = localStorage.getItem("userRole");
+
+    if (savedUser && savedRole) {
+      try {
+        setUser(JSON.parse(savedUser));
+        setRole(savedRole);
+      } catch (error) {
+        console.error("Error parsing saved user:", error);
+      }
     }
-    api.get("/users/me").then((res) => setUser(res.data)).catch(() => setUser(null));
-  }, [token]);
+    setLoading(false);
+  }, []);
 
-  const login = async (username, password) => {
-    const form = new URLSearchParams();
-    form.append("username", username);
-    form.append("password", password);
-    const res = await api.post("/auth/login", form, {
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    });
-    localStorage.setItem("bugflow_token", res.data.access_token);
-    setToken(res.data.access_token);
-  };
-
-  const register = async (username, email, password, role) => {
-    await api.post("/auth/register", { username, email, password, role });
+  const login = (userData) => {
+    setUser(userData);
+    setRole(userData.role);
+    localStorage.setItem("user", JSON.stringify(userData));
+    localStorage.setItem("userRole", userData.role);
   };
 
   const logout = () => {
+    setUser(null);
+    setRole(null);
+    localStorage.removeItem("user");
+    localStorage.removeItem("userRole");
     localStorage.removeItem("bugflow_token");
-    setToken(null);
   };
 
+
+  const updateUser = (updatedUserData) => {
+    const newUser = { ...user, ...updatedUserData };
+    setUser(newUser);
+    setRole(newUser.role);
+    localStorage.setItem("user", JSON.stringify(newUser));
+    localStorage.setItem("userRole", newUser.role);
+  };
+
+  const updateUserRole = (newRole) => {
+    if (user) {
+      const updatedUser = { ...user, role: newRole };
+      setUser(updatedUser);
+      setRole(newRole);
+      localStorage.setItem("user", JSON.stringify(updatedUser));
+      localStorage.setItem("userRole", newRole);
+    }
+  };
+
+  const isAuthenticated = !!user;
+
   return (
-    <AuthContext.Provider value={{ token, user, login, register, logout, isAuthenticated: !!token }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        role,
+        login,
+        logout,
+        loading,
+        updateUserRole,
+        setUser: updateUser,
+        isAuthenticated,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
 }
 
-export function useAuth() {
-  return useContext(AuthContext);
-}
+
+
+ 
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth must be used within AuthProvider");
+  }
+  return context;
+};
