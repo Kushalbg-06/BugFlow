@@ -82,16 +82,22 @@ def delete_attachment(
     
     if not attachment:
         raise HTTPException(status_code=404, detail="Attachment not found")
+    
+    # Only allow uploader or admin to delete
     if attachment.uploaded_by != current_user.id:
         raise HTTPException(
             status_code=403,
             detail="Only the uploader can delete this attachment"
         )
+    
+    # Delete the file from disk
     try:
         if os.path.exists(attachment.stored_path):
             os.remove(attachment.stored_path)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error deleting file: {str(e)}")
+    
+    # Delete from database
     db.delete(attachment)
     log_activity(db, issue_id, current_user.id, "attachment_deleted", attachment.filename)
     db.commit()

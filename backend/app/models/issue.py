@@ -32,6 +32,8 @@ class Issue(Base):
     priority = Column(Enum(IssuePriority), default=IssuePriority.MEDIUM, nullable=False)
     status = Column(Enum(IssueStatus), default=IssueStatus.OPEN, nullable=False)
     category = Column(String(50), nullable=True)
+    component = Column(String(100), nullable=True)
+    defect_type = Column(String(100), nullable=True)
 
     ai_summary = Column(Text, nullable=True)
     ai_steps_to_reproduce = Column(Text, nullable=True)

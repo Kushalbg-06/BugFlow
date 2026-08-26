@@ -1,15 +1,23 @@
-""" 
-"AI-Assisted Bug Reporting" 
+"""
+Milestone 1 "AI-Assisted Bug Reporting" — strict LLM mode.
+
 Set AI_PROVIDER in .env to "anthropic", "openai", "gemini", or "grok" (plus the
 matching API key) to generate structured reports (steps to reproduce,
 expected result, actual result, category, summary, environment, root cause).
 
+This does NOT fall back to a rule-based/offline generator. Every provider
+call has a hard timeout (AI_TIMEOUT_SECONDS, default 25s) so a slow network
+or a stuck request can't hang the API forever, and a failed attempt is
+retried up to AI_MAX_RETRIES times (default 1 retry = 2 attempts total)
+before generate_report() raises AIReportError. The API route turns that into
+a clear error response instead of hanging or silently guessing.
 """
 import functools
 import json
 import logging
 import re
 import time
+
 from app.core.config import settings
 
 logger = logging.getLogger("bugflow.ai")
@@ -37,7 +45,11 @@ Example output:
 {"category": "Data", "summary": "The cart total does not recalculate when item quantity changes, showing stale pricing until a manual refresh — this could lead to customers being charged incorrectly at checkout.", "steps_to_reproduce": "1. Add an item to the cart.\\n2. On the cart page, increase the item's quantity from 1 to 2.\\n3. Observe the displayed cart total without refreshing the page.", "expected_result": "The cart total should recalculate immediately to reflect the new quantity, without requiring a page refresh.", "actual_result": "The cart total remains unchanged after the quantity update and only reflects the correct total after the page is manually refreshed.", "environment": "Cart page, web app (browser not specified)", "root_cause": "Likely the quantity update handler is not triggering a re-render or re-fetch of the cart total — a common pattern is the total being calculated once on page load and not recomputed on state change."}
 """
 
-_MAX_OUTPUT_TOKENS = 500
+# Cap on generated tokens. A full report (summary + repro steps + expected/
+# actual + environment + root cause) comfortably fits in ~500 tokens; a
+# tighter ceiling directly cuts worst-case generation time since we don't
+# stream and always wait for the full response.
+_MAX_OUTPUT_TOKENS = 1000
 
 
 def _user_prompt(title: str, description: str) -> str:
@@ -46,6 +58,9 @@ def _user_prompt(title: str, description: str) -> str:
 
 def _parse_json_response(raw_text: str) -> dict:
     cleaned = re.sub(r"^```(?:json)?|```$", "", raw_text.strip(), flags=re.MULTILINE).strip()
+    # Some providers (Gemini in particular) can append trailing content after
+    # the JSON object even in JSON-output mode, which breaks a plain
+    # json.loads() with "Extra data". Extract just the {...} block instead.
     start = cleaned.find("{")
     end = cleaned.rfind("}")
     if start == -1 or end == -1 or end < start:
@@ -60,9 +75,19 @@ def _parse_json_response(raw_text: str) -> dict:
         "ai_environment": data.get("environment") or "Not specified",
         "ai_root_cause": data.get("root_cause") or "",
     }
+    # Guard against a "valid JSON but empty/useless" response — treat as a
+    # failure so it gets retried rather than saving a blank report. Only the
+    # core fields are required; environment/root_cause are best-effort extras.
     if not result["ai_steps_to_reproduce"] or not result["ai_expected_result"]:
         raise ValueError(f"Model returned incomplete report fields: {result}")
     return result
+
+
+# ---------------------------------------------------------------------------
+# Cached client singletons — building a client per call re-does TLS/handshake
+# setup on every request. lru_cache(maxsize=1) means each client is built
+# once per process and reused for the life of the app.
+# ---------------------------------------------------------------------------
 
 @functools.lru_cache(maxsize=1)
 def _anthropic_client():
@@ -86,8 +111,14 @@ def _gemini_client():
 @functools.lru_cache(maxsize=1)
 def _grok_client():
     
-    from openai import OpenAI 
+    from openai import OpenAI  # Grok (xAI) speaks the OpenAI Chat Completions API
     return OpenAI(api_key=settings.GROK_API_KEY, base_url=settings.GROK_BASE_URL, timeout=settings.AI_TIMEOUT_SECONDS)
+
+
+# ---------------------------------------------------------------------------
+# Provider backends — each returns the same dict shape, or raises on failure.
+# Each has an explicit timeout so a slow/stuck call can't hang the request.
+# ---------------------------------------------------------------------------
 
 def _generate_with_anthropic(title: str, description: str) -> dict:
     if not settings.ANTHROPIC_API_KEY:

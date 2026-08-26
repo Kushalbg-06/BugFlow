@@ -68,6 +68,7 @@ def create_issue(payload: IssueCreate, db: Session = Depends(get_db), current_us
         issue.ai_environment = report["ai_environment"]
         issue.ai_root_cause = report["ai_root_cause"]
 
+    # Fallback to keyword classification for any missing fields
     if not issue.category or not issue.component or not issue.defect_type:
         suggestions = suggest_classification(payload.title, payload.description)
         if not issue.category:
@@ -203,7 +204,6 @@ def preview_report(payload: PrioritySuggestRequest, current_user: User = Depends
 @router.post("/classify", response_model=ClassificationSuggestion)
 def classify_issue(payload: PrioritySuggestRequest, current_user: User = Depends(get_current_user)):
     return ClassificationSuggestion(**suggest_classification(payload.title, payload.description))
-
 
 @router.get("/{issue_id}/resolution-assistant", response_model=ResolutionAssistance)
 def resolution_assistant(issue_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
