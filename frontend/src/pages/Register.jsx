@@ -32,7 +32,9 @@ export default function Register() {
       <div className="auth-form-side">
       <div className="auth-form-card">
           <div className="auth-form-brand">
-            <div className="sidebar-logo" style={{ width: 30, height: 30, fontSize: 14 }}>B</div>
+          <div className="sidebar-logo">
+          <img src="/bugflow-logo.png" alt="BugFlow Logo" />
+          </div>
             BugFlow
           </div>
           <form onSubmit={handleSubmit}>

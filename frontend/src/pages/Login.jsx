@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import AuthSide from "../components/AuthSide";
+import api from "../api";
 
 export default function Login() {
   const [username, setUsername] = useState("");
@@ -14,13 +15,39 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+  
     try {
-      await login(username, password);
+      const params = new URLSearchParams();
+      params.append("username", username);
+      params.append("password", password);
+  
+      const res = await api.post("/auth/login", params, {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      });
+  
+      localStorage.setItem(
+        "bugflow_token",
+        res.data.access_token
+      );
+  
+      const userRes = await api.get("/users/me");
+  
+      login(userRes.data);
+  
       navigate("/dashboard");
+  
     } catch (err) {
-      setError(err.response?.data?.detail || "Login failed");
+      setError(
+        err.response?.data?.detail ||
+        err.message ||
+        "Login failed"
+      );
     }
   };
+
+  // ...rest of component unchanged
 
   return (
     <div className="auth-shell">
@@ -28,7 +55,9 @@ export default function Login() {
       <div className="auth-form-side">
       <div className="auth-form-card">
           <div className="auth-form-brand">
-            <div className="sidebar-logo" style={{ width: 30, height: 30, fontSize: 14 }}>B</div>
+          <div className="sidebar-logo">
+          <img src="/bugflow-logo.png" alt="BugFlow Logo" />
+          </div>
             BugFlow
           </div>
           <form onSubmit={handleSubmit}>

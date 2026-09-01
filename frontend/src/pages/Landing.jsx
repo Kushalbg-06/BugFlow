@@ -39,6 +39,13 @@ const FEATURES = [
   { icon: "📎", title: "Attachments", text: "Drop in screenshots or logs directly on the issue — no separate tool needed." },
 ];
 
+const QUICK_FEATURES = [
+  { icon: "⚡", title: "Lightning Fast", text: "Create, assign and resolve issues in seconds.", tint: "purple" },
+  { icon: "👥", title: "Team Collaboration", text: "Keep your team in sync with comments and updates.", tint: "pink" },
+  { icon: "📈", title: "Powerful Insights", text: "Get real-time reports and analytics.", tint: "amber" },
+  { icon: "🛡", title: "Secure & Reliable", text: "Your data is secure with enterprise-grade protection.", tint: "green" },
+];
+
 const STEPS = [
   { n: "01", title: "Create a project", text: "Spin up a workspace for each product or team in seconds." },
   { n: "02", title: "Report a bug", text: "Describe what happened — AI drafts the structured report for you." },
@@ -49,6 +56,8 @@ const STATS = [
   { value: "100%", label: "Audit trail coverage" },
   { value: "0", label: "Spreadsheets needed" },
 ];
+
+const AVATAR_COLORS = ["#6d5ce8", "#e8623f", "#1f9d55", "#d4a017"];
 
 export default function Landing() {
   const [showTop, setShowTop] = useState(false);
@@ -65,63 +74,139 @@ export default function Landing() {
 
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
 
+  const scrollToId = (id) => (e) => {
+    e.preventDefault();
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+  };
+
   return (
     <div className="landing-page">
       <nav className="landing-nav">
         <div className="landing-nav-brand">
-          <div className="sidebar-logo" style={{ width: 30, height: 30, fontSize: 14 }}>B</div>
-          BugFlow
+          <div className="sidebar-logo" style={{ width: 45, height: 45 }}>
+          <img src="/bugflow-logo.png" alt="BugFlow" />
+          </div>BugFlow
+          </div>
+
+        <div className="landing-nav-links">
+          <a href="#features" onClick={scrollToId("features")}>Features</a>
+          <a href="#how-it-works" onClick={scrollToId("how-it-works")}>How It Works</a>
+          <Link to="/about">About</Link>
+          <Link to="/contact">Contact</Link>
         </div>
+
         <div className="landing-nav-actions">
-          <Link to="/login">Sign in</Link>
-          <Link to="/register" className="btn-nav-cta">Get started</Link>
+          <button className="theme-toggle-btn" aria-label="Toggle theme" type="button">☀</button>
+          <Link to="/login" className="btn-nav-login">Login</Link>
+          <Link to="/register" className="btn-nav-solid">Get Started</Link>
         </div>
       </nav>
 
-      <section className="landing-hero">
+      <section className="landing-hero-v2">
         <div className="hero-blob hero-blob-1" />
         <div className="hero-blob hero-blob-2" />
 
         <div className="landing-hero-copy reveal reveal-visible">
-          <div className="landing-tag">✦ ISSUE TRACKING REIMAGINED</div>
-          <h1>Track bugs, ship faster, <span>stay aligned.</span></h1>
+          <h1 className="hero-headline">
+            Track. Manage.<br />
+            Resolve. <span>Faster.</span>
+          </h1>
           <p>
-            BugFlow helps engineering, QA, and product teams turn chaos into clarity.
-            Manage projects, organize issues, track progress, and generate structured bug
-            reports — all from one workspace.
+            BugFlow helps teams track issues, manage projects,
+            and ship high-quality software with ease.
           </p>
           <div className="landing-hero-actions">
-            <Link to="/register" className="btn btn-glow">✦ Start for free</Link>
-            <Link to="/login" className="btn-nav-cta btn-nav-cta-lg">Sign in</Link>
+            <Link to="/register" className="btn btn-glow">Get Started Free →</Link>
+            <a href="#how-it-works" onClick={scrollToId("how-it-works")} className="btn-view-demo">
+              View Demo ▶
+            </a>
+          </div>
+          <div className="hero-social-proof">
+            <div className="avatar-stack">
+              {AVATAR_COLORS.map((c, i) => (
+                <span key={i} className="avatar-stack-item" style={{ background: c, zIndex: AVATAR_COLORS.length - i }} />
+              ))}
+              <span className="avatar-stack-item avatar-stack-more">+2k</span>
+            </div>
+            <span>Join 2,000+ teams already using BugFlow</span>
           </div>
         </div>
 
-        <div className="landing-card reveal reveal-visible" style={{ transitionDelay: "150ms" }}>
-          <div className="landing-card-item">
-            <h4>Why BugFlow?</h4>
-            <p>Because every bug deserves fast resolution, clear ownership, and fewer distractions.</p>
-          </div>
-          <div className="landing-card-item">
-            <h4>The problem we solve</h4>
-            <p>Unstructured tracking, unclear handoffs, and slow triage lead to wasted time.</p>
-          </div>
-          <div className="landing-card-item">
-            <h4>How it helps</h4>
-            <p>Centralize bugs, prioritize what matters with AI, and give teams one place to move forward.</p>
+        <div className="hero-preview-wrap reveal reveal-visible" style={{ transitionDelay: "150ms" }}>
+          <div className="hero-preview-dots" />
+          <div className="mini-app-shell">
+            <div className="mini-sidebar">
+              <div className="mini-sidebar-brand">
+                <span className="mini-logo">B</span> BugFlow
+              </div>
+              <div className="mini-nav-link active">▦ Dashboard</div>
+              <div className="mini-nav-link">▥ Projects</div>
+              <div className="mini-nav-link">◉ Issues</div>
+              <div className="mini-nav-link">◷ Sprints</div>
+              <div className="mini-nav-link">📊 Reports</div>
+              <div className="mini-nav-link">⚙ Settings</div>
+            </div>
+            <div className="mini-main">
+              <div className="mini-topbar">
+                <span className="mini-search">🔍 Search issues, projects...</span>
+                <span className="mini-bell">🔔</span>
+                <span className="mini-user">kushal <span className="mini-avatar">K</span></span>
+              </div>
+              <div className="mini-content">
+                <div className="mini-page-title">
+                  Dashboard <span className="mini-cta-btn">+ Create Issue</span>
+                </div>
+                <div className="mini-stat-row">
+                  <div className="mini-stat"><span>2</span>Total Projects</div>
+                  <div className="mini-stat"><span>16</span>Total Issues</div>
+                  <div className="mini-stat mini-stat-open"><span>12</span>Open Issues</div>
+                  <div className="mini-stat mini-stat-progress"><span>3</span>In Progress</div>
+                  <div className="mini-stat mini-stat-resolved"><span>1</span>Resolved</div>
+                </div>
+                <div className="mini-panel-row">
+                  <div className="mini-panel">
+                    <div className="mini-panel-title">Recent Issues <span>View All</span></div>
+                    <div className="mini-list-row"><strong>Login page not working</strong><span>Open • Critical</span></div>
+                    <div className="mini-list-row"><strong>API response delay</strong><span>Open • High</span></div>
+                    <div className="mini-list-row"><strong>Unable to upload file</strong><span>Open • Medium</span></div>
+                    <div className="mini-list-row"><strong>Dashboard loading slow</strong><span>In Progress • Low</span></div>
+                  </div>
+                  <div className="mini-panel">
+                    <div className="mini-panel-title">Projects Overview <span>View All</span></div>
+                    <div className="mini-progress-row">
+                      <span>E-Commerce Platform</span>
+                      <div className="mini-progress-track"><div className="mini-progress-fill" style={{ width: "60%" }} /></div>
+                      <span className="mini-progress-label">12 / 20 issues</span>
+                    </div>
+                    <div className="mini-progress-row">
+                      <span>Hospital Management System</span>
+                      <div className="mini-progress-track"><div className="mini-progress-fill" style={{ width: "53%" }} /></div>
+                      <span className="mini-progress-label">8 / 15 issues</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      <section className="landing-stats">
-        {STATS.map((s, i) => (
-          <Reveal key={s.label} delay={i * 80} className="stat-block">
-            <div className="stat-block-value">{s.value}</div>
-            <div className="stat-block-label">{s.label}</div>
+      {/* Quick feature strip */}
+      <section className="quick-feature-strip">
+        {QUICK_FEATURES.map((f, i) => (
+          <Reveal key={f.title} delay={i * 60} className={`quick-feature-card tint-${f.tint}`}>
+            <div className="quick-feature-icon">{f.icon}</div>
+            <div>
+              <h4>{f.title}</h4>
+              <p>{f.text}</p>
+            </div>
           </Reveal>
         ))}
       </section>
 
-      <section className="landing-section">
+     
+
+      <section className="landing-section" id="features">
         <Reveal className="landing-section-header">
           <div className="landing-tag">FEATURES</div>
           <h2>Everything a bug's lifecycle needs</h2>
@@ -139,9 +224,9 @@ export default function Landing() {
         </div>
       </section>
 
-      <section className="landing-section landing-section-tint">
+      <section className="landing-section landing-section-tint" id="how-it-works">
         <Reveal className="landing-section-header">
-          <div className="landing-tag">HOW IT WORKS</div>
+          <div className="landing-tag"><h1>HOW IT WORKS</h1></div>
           <h2>Three steps to a cleaner backlog</h2>
         </Reveal>
 
@@ -169,6 +254,8 @@ export default function Landing() {
       <footer className="landing-footer">
         <div>BugFlow · Bug Lifecycle Management</div>
         <div style={{ display: "flex", gap: 18 }}>
+          <Link to="/about">About</Link>
+          <Link to="/contact">Contact</Link>
           <Link to="/login">Sign in</Link>
           <Link to="/register">Get started</Link>
         </div>
