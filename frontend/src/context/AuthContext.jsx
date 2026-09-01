@@ -38,7 +38,6 @@ export function AuthProvider({ children }) {
     localStorage.removeItem("bugflow_token");
   };
 
-
   const updateUser = (updatedUserData) => {
     const newUser = { ...user, ...updatedUserData };
     setUser(newUser);
@@ -77,9 +76,10 @@ export function AuthProvider({ children }) {
   );
 }
 
-
-
- 
+/**
+ *
+ * @returns {Object} { user, role, login, logout, loading, updateUserRole, setUser, isAuthenticated }
+ */
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {

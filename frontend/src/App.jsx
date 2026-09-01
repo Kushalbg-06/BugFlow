@@ -9,6 +9,7 @@ import Issues from "./pages/Issues";
 import IssueForm from "./pages/IssueForm";
 import IssueDetail from "./pages/IssueDetail";
 import Sprints from "./pages/Sprints";
+import Profile from "./pages/Profile";
 
 function PrivateRoute({ children }) {
   const { isAuthenticated } = useAuth();
@@ -32,6 +33,7 @@ function AppRoutes() {
       <Route path="/create-issue" element={<PrivateRoute><IssueForm /></PrivateRoute>} />
       <Route path="/issues/:id/report" element={<PrivateRoute><IssueDetail /></PrivateRoute>} />
       <Route path="/sprints" element={<PrivateRoute><Sprints /></PrivateRoute>} />
+      <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
@@ -44,3 +46,4 @@ export default function App() {
     </AuthProvider>
   );
 }
+
