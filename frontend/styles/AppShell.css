@@ -1,0 +1,76 @@
+/* =========================
+   ADD THESE STYLES ONLY
+   (on top of the search/topbar/dropdown block you already added)
+   ========================= */
+
+/* --- Dark theme ---
+   The AppShell now toggles data-theme="dark"/"light" on <html>, but
+   nothing was actually listening for it yet — the button did nothing
+   visually. This overrides the same custom properties your app already
+   uses (--panel-bg, --text-dark, --text-muted, --border, --bg-muted)
+   so existing components pick up dark mode for free, with no other
+   file needing to change.
+
+   IMPORTANT: I don't have your actual :root variable values, so these
+   are reasonable dark-mode equivalents, not a color-matched inverse of
+   your real palette — treat them as a starting point and adjust the
+   hex values to taste. */
+   :root[data-theme="dark"] {
+    --panel-bg: #1e1f2e;
+    --bg-muted: #2a2b3d;
+    --bg-muted-hover: #33344a;
+    --border: #363752;
+    --text-dark: #f1f2fb;
+    --text-muted: #9497b8;
+  }
+  
+  :root[data-theme="dark"] body {
+    background: #14151f;
+  }
+  
+  /* topbar/search/dropdown were hardcoded to light hex values in the
+     original "ADD THESE STYLES ONLY" block, so they need their own
+     dark-mode overrides rather than picking up the variables above */
+  :root[data-theme="dark"] .search-form {
+    background: #262738;
+    border-color: #363752;
+  }
+  :root[data-theme="dark"] .search-form:focus-within {
+    background: #2f3044;
+  }
+  :root[data-theme="dark"] .search-input { color: #e5e6f5; }
+  :root[data-theme="dark"] .search-shortcut { background: #363752; color: #9497b8; }
+  
+  :root[data-theme="dark"] .icon-btn:hover { background: #2a2b3d; }
+  
+  :root[data-theme="dark"] .topbar-user:hover { background: #2a2b3d; }
+  :root[data-theme="dark"] .topbar-user-info strong { color: #f1f2fb; }
+  :root[data-theme="dark"] .topbar-user-info span { color: #9497b8; }
+  
+  :root[data-theme="dark"] .profile-dropdown {
+    background: #1e1f2e;
+    border-color: #363752;
+  }
+  :root[data-theme="dark"] .dropdown-item { color: #e5e6f5; }
+  :root[data-theme="dark"] .dropdown-item:hover { background: #2a2b3d; }
+  :root[data-theme="dark"] .dropdown-item.logout:hover { background: #3a1f24; }
+  :root[data-theme="dark"] .dropdown-divider { background: #363752; }
+  
+  /* --- Small polish --- */
+  
+  /* rotate the dropdown chevron when the menu is open (needs the JSX to
+     add an "open" class alongside sidebar-profile-chevron when menuOpen
+     is true — see note below) */
+  .sidebar-profile-chevron {
+    display: inline-block;
+    transition: transform 0.15s ease;
+  }
+  .sidebar-profile-chevron.open {
+    transform: rotate(180deg);
+  }
+  
+  /* the bell emoji + badge need the button to establish a positioning
+     context and keep the badge from being clipped */
+  .notification-btn {
+    overflow: visible;
+  }
