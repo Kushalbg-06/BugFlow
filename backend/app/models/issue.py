@@ -4,6 +4,7 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
+
 class IssuePriority(str, enum.Enum):
     CRITICAL = "critical"
     HIGH = "high"
@@ -57,3 +58,5 @@ class Issue(Base):
     comments = relationship("Comment", back_populates="issue", cascade="all, delete-orphan")
     attachments = relationship("Attachment", back_populates="issue", cascade="all, delete-orphan")
     activity_logs = relationship("ActivityLog", back_populates="issue", cascade="all, delete-orphan")
+    test_cases = relationship("TestCase", back_populates="issue", cascade="all, delete-orphan")
+

@@ -1,15 +1,11 @@
-"""
-Response schemas for the /analytics endpoints.
-"""
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 
 
 class SummaryDelta(BaseModel):
-    value: float          # e.g. 12.5  -> shown as "12.5%"
-    direction: str         # "up" | "down"
-
+    value: float          
+    direction: str         
 
 class AnalyticsSummary(BaseModel):
     total_defects: int
@@ -26,13 +22,12 @@ class AnalyticsSummary(BaseModel):
 
 
 class BreakdownItem(BaseModel):
-    label: str              # "Critical", "UI / UX", "Open", etc.
+    label: str             
     count: int
-    percentage: float       # 0-100, rounded to 1 decimal
-
+    percentage: float      
 
 class TrendPoint(BaseModel):
-    date: str                # "Aug 12" (already formatted) or ISO date
+    date: str                
     total: int
     open: int
     resolved: int
@@ -45,15 +40,15 @@ class DeveloperWorkload(BaseModel):
     open_count: int
     in_progress_count: int
     resolved_count: int
-    workload_percentage: float   # 0-100, relative to the busiest developer
+    workload_percentage: float   
 
 
 class RecentDefect(BaseModel):
-    key: str                 # "BUG-642"
+    key: str                
     title: str
     project_name: str
     severity: str
     status: str
     assignee_name: Optional[str]
     created_at: datetime
-    resolution_days: Optional[float]   # None if not resolved yet
+    resolution_days: Optional[float]   

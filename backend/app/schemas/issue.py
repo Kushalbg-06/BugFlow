@@ -123,3 +123,27 @@ class ResolutionAssistance(BaseModel):
     impact_area: list[str]
     estimated_effort: str
     verification_checklist: list[str]
+
+
+# Developer Recommendation Models
+class DeveloperRecommendation(BaseModel):
+    """A single developer recommendation."""
+    user_id: int
+    username: str
+    full_name: Optional[str] = None
+    match_score: int
+    skills: list[str]
+    active_issues_count: int
+    reasoning: list[str]
+
+    class Config:
+        from_attributes = True
+
+
+class DeveloperRecommendations(BaseModel):
+    """Container for developer recommendations."""
+    best_match: Optional[DeveloperRecommendation] = None
+    other_recommendations: list[DeveloperRecommendation] = []
+
+    class Config:
+        from_attributes = True

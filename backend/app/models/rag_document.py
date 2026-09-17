@@ -14,10 +14,6 @@ class RagDocumentType(str, enum.Enum):
 
 
 class RagDocument(Base):
-    """One embedded chunk of historical BugFlow knowledge, tied to an issue.
-    `source_id` disambiguates rows: for issue/report/resolution docs it equals
-    issue_id; for comments/test_cases it's the comment/test_case row id, so a
-    single issue can contribute many documents (one per comment, per test case)."""
     __tablename__ = "rag_documents"
     __table_args__ = (UniqueConstraint("issue_id", "document_type", "source_id", name="uq_rag_doc_key"),)
 

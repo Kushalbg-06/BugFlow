@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 from app.core.database import get_db
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, require_roles
 from app.models.project import Project
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas.project import ProjectCreate, ProjectOut, ProjectUpdate
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -13,7 +13,7 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 def create_project(
     payload: ProjectCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ):
     if db.query(Project).filter(Project.name == payload.name).first():
         raise HTTPException(status_code=400, detail="Project name already exists")
@@ -39,7 +39,7 @@ def update_project(
     project_id: int,
     payload: ProjectUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ):
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
@@ -65,7 +65,7 @@ def update_project(
 def delete_project(
     project_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ):
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:

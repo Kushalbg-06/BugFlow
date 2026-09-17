@@ -1,13 +1,8 @@
-"""
-Sprint Health AI Response Schemas
-"""
-
 from pydantic import BaseModel
 from typing import List, Optional
 
 
 class IssueForHealth(BaseModel):
-    """Issue details for sprint health analysis."""
     id: int
     title: str
     priority: str
@@ -18,7 +13,6 @@ class IssueForHealth(BaseModel):
 
 
 class RankedIssue(BaseModel):
-    """Ranked incomplete issue."""
     issue_id: int
     title: str
     priority: str
@@ -29,7 +23,6 @@ class RankedIssue(BaseModel):
 
 
 class HealthScoreSummary(BaseModel):
-    """Sprint summary metrics."""
     sprint_progress: int
     time_progress: int
     total_issues: int
@@ -42,13 +35,12 @@ class HealthScoreSummary(BaseModel):
 
 
 class SprintHealthAnalysis(BaseModel):
-    """Complete sprint health AI analysis."""
     sprint_id: int
     sprint_name: str
     project_name: str
     
-    health_score: int  # 0-100
-    health_status: str  # 🟢 Healthy, 🟡 At Risk, 🔴 Critical
+    health_score: int  
+    health_status: str  
     
     summary: HealthScoreSummary
     
@@ -60,5 +52,4 @@ class SprintHealthAnalysis(BaseModel):
 
 
 class HealthScoreRefreshRequest(BaseModel):
-    """Request to refresh health analysis."""
     sprint_id: int

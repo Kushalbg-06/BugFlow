@@ -6,10 +6,11 @@ from sqlalchemy.orm import Session
 from typing import List
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.permissions import Permission, require_permission
 from app.services.activity import log_activity
 from app.models.issue import Issue
 from app.models.attachment import Attachment
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas.attachment import AttachmentOut
 
 router = APIRouter(prefix="/issues/{issue_id}/attachments", tags=["attachments"])
@@ -18,7 +19,11 @@ UPLOAD_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__fil
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 @router.get("", response_model=List[AttachmentOut])
-def list_attachments(issue_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def list_attachments(
+    issue_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission(Permission.VIEW_ISSUES)),
+):
     if not db.query(Issue).filter(Issue.id == issue_id).first():
         raise HTTPException(status_code=404, detail="Issue not found")
     return db.query(Attachment).filter(Attachment.issue_id == issue_id).order_by(Attachment.created_at.desc()).all()
@@ -28,7 +33,7 @@ async def upload_attachment(
     issue_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.UPLOAD_ATTACHMENT)),
 ):
     issue = db.query(Issue).filter(Issue.id == issue_id).first()
     if not issue:
@@ -61,7 +66,12 @@ async def upload_attachment(
     return attachment
 
 @router.get("/{attachment_id}/download")
-def download_attachment(issue_id: int, attachment_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def download_attachment(
+    issue_id: int,
+    attachment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission(Permission.VIEW_ISSUES)),
+):
     attachment = db.query(Attachment).filter(Attachment.id == attachment_id, Attachment.issue_id == issue_id).first()
     if not attachment or not os.path.exists(attachment.stored_path):
         raise HTTPException(status_code=404, detail="Attachment not found")
@@ -74,32 +84,29 @@ def delete_attachment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Delete an attachment from an issue"""
+    """Delete an attachment: the uploader, or an Admin, can delete it."""
     attachment = db.query(Attachment).filter(
         Attachment.id == attachment_id,
         Attachment.issue_id == issue_id
     ).first()
-    
+
     if not attachment:
         raise HTTPException(status_code=404, detail="Attachment not found")
-    
-    # Only allow uploader or admin to delete
-    if attachment.uploaded_by != current_user.id:
+
+    if attachment.uploaded_by != current_user.id and current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=403,
-            detail="Only the uploader can delete this attachment"
+            detail="Only the uploader or an admin can delete this attachment"
         )
-    
-    # Delete the file from disk
+
     try:
         if os.path.exists(attachment.stored_path):
             os.remove(attachment.stored_path)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error deleting file: {str(e)}")
-    
-    # Delete from database
+
     db.delete(attachment)
     log_activity(db, issue_id, current_user.id, "attachment_deleted", attachment.filename)
     db.commit()
-    
+
     return None

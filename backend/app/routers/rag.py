@@ -61,8 +61,6 @@ def rag_chat(
 @router.post("/index", response_model=RagIndexResponse)
 def rag_reindex(
     db: Session = Depends(get_db),
-    # Admin-only — there's no dedicated "manage RAG" permission yet, so this
-    # borrows MANAGE_ROLES (admin-exclusive in your ROLE_PERMISSIONS map).
     current_user: User = Depends(require_permission(Permission.MANAGE_ROLES)),
 ):
     return RagIndexResponse(**index_all_resolved_issues(db))

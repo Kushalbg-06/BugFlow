@@ -1,9 +1,3 @@
-"""
-AI-powered analysis endpoints.
-
-Includes: Sprint Health AI, Issue Classification, Resolution Assistance, etc.
-"""
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -24,11 +18,9 @@ from app.ai.sprint_health import (
     generate_sprint_outlook,
 )
 
-# ===== ROUTER DEFINITION =====
 router = APIRouter(prefix="/ai", tags=["ai"])
 
 
-# ===== ENDPOINTS =====
 
 @router.post("/sprint-health/{sprint_id}", response_model=SprintHealthAnalysis)
 def analyze_sprint_health(
@@ -36,14 +28,6 @@ def analyze_sprint_health(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission(Permission.VIEW_ISSUES)),
 ):
-    """
-    Analyze sprint health and get AI-powered recommendations.
-    
-    - Calculates health score (0-100)
-    - Identifies risks
-    - Ranks incomplete issues
-    - Generates actionable recommendations
-    """
     
     try:
         # Fetch sprint
@@ -71,13 +55,10 @@ def analyze_sprint_health(
             issues
         )
         
-        # Identify risks
         risks = identify_risks(sprint, issues, health_score)
         
-        # Rank incomplete issues
         ranked_issues = rank_incomplete_issues(issues)
         
-        # Generate recommendations
         ai_recommendation = generate_ai_recommendation(
             sprint,
             issues,
@@ -91,7 +72,6 @@ def analyze_sprint_health(
             risks
         )
         
-        # Build summary
         resolved_count = len([
             i for i in issues
             if i.status == IssueStatus.RESOLVED
@@ -145,7 +125,6 @@ def analyze_sprint_health(
             scope_additions=scope_additions,
         )
         
-        # Convert ranked issues to dict format for response
         ranked_issues_response = [
             {
                 "issue_id": issue.issue_id,
