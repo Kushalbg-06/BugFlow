@@ -1,19 +1,10 @@
-"""
-Embedding generation for the RAG knowledge base.
-Kept separate from retrieval (rag_retrieval.py) and chat generation
-(rag_chat.py) so any of the three can be swapped independently — same
-philosophy as report_generator.py's provider abstraction.
-
-Uses sentence-transformers locally (no API key, no network call) so
-embeddings never depend on which AI_PROVIDER is configured for chat.
-"""
 import functools
 import json
 import logging
 
 logger = logging.getLogger("bugflow.rag.embeddings")
 
-EMBEDDING_DIM = 384  # all-MiniLM-L6-v2
+EMBEDDING_DIM = 384  
 
 
 @functools.lru_cache(maxsize=1)

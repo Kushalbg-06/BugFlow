@@ -1,7 +1,3 @@
-"""
-Resolution Assistance — the signature AI feature.
-Rule-based now (same swap-for-a-real-LLM pattern as triage.py / duplicates.py).
-"""
 import re
 from difflib import SequenceMatcher
 from typing import Iterable, Optional

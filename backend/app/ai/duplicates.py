@@ -1,9 +1,3 @@
-"""
-Uses difflib text similarity as a lightweight stand-in for vector-embedding
-search (Pinecone/pgvector) — no external service or API key required.
-To upgrade: embed each issue's text and compare via cosine similarity
-instead of SequenceMatcher; the rest of the flow is unchanged.
-"""
 from difflib import SequenceMatcher
 from typing import Iterable
 

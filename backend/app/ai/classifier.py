@@ -40,6 +40,7 @@ client = OpenAI(
     base_url=GROK_BASE_URL
 )
 
+
 class DefectClassification(BaseModel):
 
     category: str
@@ -64,8 +65,10 @@ class DefectClassification(BaseModel):
 
     reason: str
 
+
 def clean_description(description: str) -> str:
     return description.strip()
+
 def suggest_classification(
     title: str,
     description: str
@@ -198,7 +201,7 @@ Use exactly this structure:
     "module": "Payment Gateway",
     "defect_type": "Functional Defect",
     "severity": "high",
-    "priority": "P1",
+    "priority": "high",
     "reason": "Short explanation"
 }}
 """
@@ -232,7 +235,7 @@ Use exactly this structure:
 
         content = content.strip()
 
-        # Remove markdown fences if returned
+        
         if content.startswith("```"):
             content = content.replace(
                 "```json",
@@ -242,9 +245,10 @@ Use exactly this structure:
                 ""
             ).strip()
 
+        
         result = json.loads(content)
 
-        # Validate the response
+    
         classification = DefectClassification(
             **result
         )
@@ -264,12 +268,14 @@ Use exactly this structure:
 
     except Exception as e:
 
+        
+
         return {
             "category": "General",
             "module": "Unclassified",
             "defect_type": "Functional Defect",
             "severity": "medium",
-            "priority": "P2",
+            "priority": "medium",
             "reason": f"AI classification failed: {str(e)}",
             "cleaned_description": clean_description(
                 description

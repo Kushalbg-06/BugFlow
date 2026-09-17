@@ -1,7 +1,3 @@
-"""
-Suggests a priority level from the bug text using keyword heuristics.
-Same "swap this for a real LLM later" pattern as report_generator.py.
-"""
 PRIORITY_KEYWORDS = {
     "critical": ["crash", "down", "outage", "data loss", "security", "breach", "cannot log in", "payment fails", "unusable"],
     "high": ["broken", "fails", "error", "not working", "blocks", "major", "incorrect data"],

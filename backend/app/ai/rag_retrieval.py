@@ -1,7 +1,3 @@
-"""
-RAG retrieval: searches historical (resolved) issue embeddings for the
-current issue + question, enforcing RBAC BEFORE anything reaches the LLM.
-"""
 import logging
 from sqlalchemy.orm import Session
 

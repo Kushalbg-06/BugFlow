@@ -1,10 +1,3 @@
-"""
-Builds and maintains the RAG knowledge base from resolved BugFlow issues.
-This is the write path only — kept separate from embeddings.py (raw
-embedding calls) and rag_retrieval.py (search-time logic), per the "keep
-retrieval separate from chatbot logic, embedding separate from LLM
-generation" requirement.
-"""
 import hashlib
 import json
 import logging

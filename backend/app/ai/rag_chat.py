@@ -1,8 +1,3 @@
-"""
-LLM answer generation for the issue-aware RAG chatbot. Reuses the same
-AI_PROVIDER configured for report_generator.py — no separate provider system.
-Kept separate from retrieval and embeddings.
-"""
 import functools
 import logging
 

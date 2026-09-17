@@ -318,7 +318,7 @@ def generate_sprint_outlook(
     return outlook
 
 
-# ===== HELPERS =====
+
 
 def _calculate_time_progress(sprint: Sprint) -> Tuple[int, int]:
     """
@@ -328,17 +328,17 @@ def _calculate_time_progress(sprint: Sprint) -> Tuple[int, int]:
     """
     
     if not sprint.start_date or not sprint.end_date:
-        return 0, 10  # No dates, assume early in sprint
+        return 0, 10  
     
     now = datetime.now().date()
     start = sprint.start_date
     end = sprint.end_date
     
     if now < start:
-        return 0, 20  # Sprint hasn't started
+        return 0, 20  
     
     if now >= end:
-        return 100, 0  # Sprint is over
+        return 100, 0
     
     total_days = (end - start).days + 1
     elapsed_days = (now - start).days
