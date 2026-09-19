@@ -1,15 +1,36 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
 import AuthSide from "../components/AuthSide";
+import api from "../api";
 
-const ROLES = ["reporter", "qa", "developer", "admin"];
+const ROLES = ["reporter", "qa", "developer", "manager", "admin"];
+
+const errorBoxStyle = {
+  padding: "12px 16px",
+  marginBottom: "16px",
+  backgroundColor: "#fee2e2",
+  borderLeft: "4px solid #ef4444",
+  borderRadius: "4px",
+  color: "#991b1b",
+  fontSize: "14px",
+  fontWeight: "500",
+};
+
+const roleLabel = (role) => (role === "qa" ? "QA" : role[0].toUpperCase() + role.slice(1));
+
+const apiMessage = (err, fallback) => {
+  const detail = err.response?.data?.detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail.map((item) => item.msg || JSON.stringify(item)).join(". ");
+  }
+  return fallback;
+};
 
 export default function Register() {
   const [form, setForm] = useState({ username: "", email: "", password: "", role: "reporter" });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
-  const { register } = useAuth();
   const navigate = useNavigate();
 
   const update = (field) => (e) => setForm({ ...form, [field]: e.target.value });
@@ -18,11 +39,11 @@ export default function Register() {
     e.preventDefault();
     setError("");
     try {
-      await register(form.username, form.email, form.password, form.role);
+      await api.post("/auth/register", form);
       setSuccess(true);
       setTimeout(() => navigate("/login"), 1000);
     } catch (err) {
-      setError(err.response?.data?.detail || "Registration failed");
+      setError(apiMessage(err, "Registration failed"));
     }
   };
 
@@ -41,7 +62,11 @@ export default function Register() {
             <div className="eyebrow">GET STARTED</div>
             <h2>Create your workspace account</h2>
             <p className="sub">Fill in your details to continue.</p>
-            {error && <p className="error">{error}</p>}
+            {error && (
+              <div style={errorBoxStyle}>
+                ⚠️ {error}
+              </div>
+            )}
             {success && <p className="success">Account created! Redirecting to login...</p>}
             <label>Username</label>
             <input value={form.username} onChange={update("username")} required />
@@ -52,7 +77,7 @@ export default function Register() {
             <label>Role</label>
             <select value={form.role} onChange={update("role")}>
               {ROLES.map((r) => (
-                <option key={r} value={r}>{r[0].toUpperCase() + r.slice(1)}</option>
+                <option key={r} value={r}>{roleLabel(r)}</option>
               ))}
             </select>
             <button className="btn" type="submit">Create account</button>

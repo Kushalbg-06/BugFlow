@@ -2,46 +2,57 @@ import { useEffect, useState } from "react";
 import AppShell from "../components/AppShell";
 import { useAuth } from "../context/AuthContext";
 import api from "../api";
+import SkillsExpertise from "../components/SkillsExpertise";
+
 
 export default function Profile() {
   const { user, setUser } = useAuth();
-  const [issues, setIssues] = useState([]);
+  const [stats, setStats] = useState(null);
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ full_name: "", email: "" });
+  const [form, setForm] = useState({ full_name: "", email: "", bio: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [loadingIssues, setLoadingIssues] = useState(true);
+  const [loadingStats, setLoadingStats] = useState(true);
 
-  // Load issues
+  // Load user stats
   useEffect(() => {
-    setLoadingIssues(true);
+    if (!user?.id) return;
+    
+    setLoadingStats(true);
     api
-      .get("/issues")
-      .then((res) => setIssues(res.data || []))
+      .get("/users/me/stats")
+      .then((res) => setStats(res.data))
       .catch((err) => {
-        console.error("Error loading issues:", err);
-        setIssues([]);
+        console.error("Error loading stats:", err);
+        setStats(null);
       })
-      .finally(() => setLoadingIssues(false));
-  }, []);
+      .finally(() => setLoadingStats(false));
+  }, [user?.id]);
 
   // Profile display
   const initial = user?.username ? user.username[0].toUpperCase() : "?";
-  const roleLabel = user?.role ? user.role.replace(/_/g, " ").split(" ").map(w => w[0].toUpperCase() + w.slice(1)).join(" ") : "—";
+  const roleLabel = user?.role 
+    ? user.role.replace(/_/g, " ").split(" ").map(w => w[0].toUpperCase() + w.slice(1)).join(" ")
+    : "—";
+  
   const memberSince = user?.created_at
     ? new Date(user.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" })
     : "—";
 
-  // Stats
-  const issuesCreated = issues.filter((i) => i.reporter_id === user?.id).length;
-  const issuesResolved = issues.filter((i) => i.status === "resolved" && i.reporter_id === user?.id).length;
-  const assignedToMe = issues.filter((i) => i.assignee_id === user?.id).length;
+  const displayName = user?.full_name || user?.username || "User";
+
+  // Stats with fallback
+  const issuesCreated = stats?.issues_created || 0;
+  const issuesResolved = stats?.issues_resolved || 0;
+  const assignedToMe = stats?.issues_assigned || 0;
+  const totalComments = stats?.total_comments || 0;
 
   const startEdit = () => {
     setError("");
     setForm({
-      full_name: user?.full_name || user?.username || "",
+      full_name: user?.full_name || "",
       email: user?.email || "",
+      bio: user?.bio || "",
     });
     setEditing(true);
   };
@@ -55,16 +66,17 @@ export default function Profile() {
     e.preventDefault();
     setError("");
     
-    if (!form.email || !form.full_name) {
-      setError("All fields are required");
+    if (!form.email) {
+      setError("Email is required");
       return;
     }
 
     setSaving(true);
     try {
       const res = await api.patch("/users/me", {
-        full_name: form.full_name,
+        full_name: form.full_name || null,
         email: form.email,
+        bio: form.bio || null,
       });
       
       // Update user in context
@@ -110,7 +122,7 @@ export default function Profile() {
               <div className="avatar" style={{ width: 72, height: 72, fontSize: 26 }}>{initial}</div>
             </div>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 19 }}>{user?.username || "..."}</div>
+              <div style={{ fontWeight: 700, fontSize: 19 }}>{displayName}</div>
               <span className="profile-role-badge">{roleLabel}</span>
               <div style={{ display: "flex", gap: 18, marginTop: 8, fontSize: 13, color: "var(--text-muted)" }}>
                 <span>✉ {user?.email || "—"}</span>
@@ -132,6 +144,10 @@ export default function Profile() {
               <div style={{ fontSize: 22, fontWeight: 800 }}>{assignedToMe}</div>
               <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Assigned to Me</div>
             </div>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 22, fontWeight: 800 }}>{totalComments}</div>
+              <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Comments</div>
+            </div>
           </div>
         </div>
 
@@ -145,8 +161,8 @@ export default function Profile() {
                 <input
                   value={form.full_name}
                   onChange={(e) => setForm({ ...form, full_name: e.target.value })}
-                  required
-                  style={{ padding: 10, border: "1px solid var(--border)", borderRadius: 8, marginBottom: 12 }}
+                  placeholder="Your full name"
+                  style={{ padding: 10, border: "1px solid var(--border)", borderRadius: 8, marginBottom: 12, width: "100%" }}
                 />
                 <label>Email</label>
                 <input
@@ -154,7 +170,14 @@ export default function Profile() {
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                   required
-                  style={{ padding: 10, border: "1px solid var(--border)", borderRadius: 8, marginBottom: 12 }}
+                  style={{ padding: 10, border: "1px solid var(--border)", borderRadius: 8, marginBottom: 12, width: "100%" }}
+                />
+                <label>Bio</label>
+                <textarea
+                  value={form.bio}
+                  onChange={(e) => setForm({ ...form, bio: e.target.value })}
+                  placeholder="Tell us about yourself"
+                  style={{ padding: 10, border: "1px solid var(--border)", borderRadius: 8, marginBottom: 12, width: "100%", minHeight: 80, fontFamily: "inherit" }}
                 />
                 <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
                   <button className="btn btn-sm" type="submit" disabled={saving}>
@@ -167,29 +190,26 @@ export default function Profile() {
               </form>
             ) : (
               <>
-                <ProfileRow label="Full Name" value={user?.full_name || user?.username || "—"} />
+                <ProfileRow label="Full Name" value={user?.full_name || "—"} />
                 <ProfileRow label="Email" value={user?.email || "—"} />
                 <ProfileRow label="Role" value={roleLabel} />
+                {user?.bio && <ProfileRow label="Bio" value={user.bio} />}
               </>
             )}
           </div>
 
+          <SkillsExpertise />
+
           <div className="panel">
             <CardHeader icon="🛡" title="Account" />
             <ProfileRow label="Member Since" value={memberSince} />
-            <ProfileRow label="Last Active" value="Today" />
             <ProfileRow label="Account Status" value={<span className="status-badge">Active</span>} />
+            <ProfileRow label="User ID" value={`#${user?.id || "—"}`} />
             <ProfileRow label="Language" value="English" />
             <ProfileRow label="Time Zone" value="(GMT+05:30) Asia/Kolkata" />
           </div>
 
-          <div className="panel">
-            <CardHeader icon="🔒" title="Security" />
-            <ProfileRow label="Password" value="••••••••" />
-            <ProfileRow label="Two-Factor Auth" value="Disabled" />
-            <ProfileRow label="Active Sessions" value="2" />
-            <ProfileRow label="Login History" value="Available" />
-          </div>
+        
         </div>
 
         {/* Row 2 */}
@@ -206,19 +226,19 @@ export default function Profile() {
           <div className="panel">
             <CardHeader icon="📈" title="Activity Overview" />
             <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "0 0 12px" }}>
-              {loadingIssues ? "Loading activity..." : "Your recent activity in BugFlow."}
+              {loadingStats ? "Loading activity..." : "Your recent activity in BugFlow."}
             </p>
-            {!loadingIssues && issues.length === 0 && (
-              <ActivityRow text="No recent activity yet" time="" />
-            )}
-            {!loadingIssues && issues.length > 0 && (
+            {!loadingStats && stats ? (
               <>
                 <ActivityRow text={`${issuesCreated} issues created`} time="" />
                 <ActivityRow text={`${assignedToMe} issues assigned`} time="" />
-                {issuesResolved > 0 && <ActivityRow text={`${issuesResolved} issues resolved`} time="" />}
+                <ActivityRow text={`${issuesResolved} issues resolved`} time="" />
+                <ActivityRow text={`${totalComments} comments added`} time="" />
               </>
+            ) : (
+              <ActivityRow text="Loading stats..." time="" />
             )}
-            <a href="#" className="profile-link">View All Activity →</a>
+            <a href="/issues" className="profile-link">View All Issues →</a>
           </div>
 
           <div className="panel">
@@ -227,7 +247,7 @@ export default function Profile() {
             <ProfileRow label="Date Format" value="DD MMM YYYY" />
             <ProfileRow label="Time Format" value="12 Hour" />
             <ProfileRow label="Items per page" value="10" />
-            <ProfileRow label="Default Project" value={user?.default_project || "None"} />
+            <ProfileRow label="Default View" value="Dashboard" />
           </div>
         </div>
       </div>

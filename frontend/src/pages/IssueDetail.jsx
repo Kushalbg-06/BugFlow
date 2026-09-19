@@ -2,21 +2,38 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import api from "../api";
 import AppShell from "../components/AppShell";
+import { useAuth } from "../context/AuthContext";
+import { PERMISSIONS } from "../auth/permissions";
+import AiDeveloperPanel from "../components/AiDeveloperPanel";
+import BugFlowAiChat from "../components/BugFlowAiChat";
 
-const TABS = ["Report","Resolution", "Comments", "Attachments", "Activity"];
 
 const STATUS_LABELS = { open: "Open", in_progress: "In Progress", in_review: "In Review", resolved: "Resolved" };
 
-// Mirrors backend app/core/state_machine.py — which transitions are legal from each status
-const TRANSITIONS = {
-  open: ["in_progress"],
-  in_progress: ["in_review", "open"],
-  in_review: ["resolved", "in_progress"],
-  resolved: ["open"],
+const STATUS_COLORS = {
+  open: { bg: "#fef3c7", color: "#b45309" },
+  in_progress: { bg: "#dbeafe", color: "#0369a1" },
+  in_review: { bg: "#fce7f3", color: "#be185d" },
+  resolved: { bg: "#dcfce7", color: "#16a34a" },
+};
+
+const PRIORITY_COLORS = {
+  critical: { bg: "#fee2e2", color: "#b91c1c", label: "🔴 HIGH" },
+  high: { bg: "#fecaca", color: "#991b1b", label: "🟠 HIGH" },
+  medium: { bg: "#fde047", color: "#854d0e", label: "🟡 MEDIUM" },
+  low: { bg: "#dcfce7", color: "#15803d", label: "🟢 LOW" },
+};
+
+const NEXT_STATUS = {
+  open: "in_progress",
+  in_progress: "in_review",
+  in_review: "resolved",
+  resolved: "open",
 };
 
 export default function IssueDetail() {
   const { id } = useParams();
+  const { hasPermission } = useAuth();
   const [issue, setIssue] = useState(null);
   const [comments, setComments] = useState([]);
   const [attachments, setAttachments] = useState([]);
@@ -32,7 +49,21 @@ export default function IssueDetail() {
   const [resolution, setResolution] = useState(null);
   const [resolutionLoading, setResolutionLoading] = useState(false);
   const [resolutionError, setResolutionError] = useState("");
+  const [recommendations, setRecommendations] = useState(null);
+  const [recommendationsLoading, setRecommendationsLoading] = useState(true);
+  const [showDevRecommendationsModal, setShowDevRecommendationsModal] = useState(false);
+  const [reanalyzing, setReanalyzing] = useState(false);
   const navigate = useNavigate();
+
+  const canViewResolution = hasPermission(PERMISSIONS.VIEW_AI_RESOLUTION);
+  const canViewDevRecommendation = hasPermission(PERMISSIONS.VIEW_AI_DEVELOPER_RECOMMENDATION);
+  const canAssign = hasPermission(PERMISSIONS.ASSIGN_ISSUE);
+  const canChangeStatus = hasPermission(PERMISSIONS.CHANGE_STATUS);
+  const canDeleteIssue = hasPermission(PERMISSIONS.DELETE_ISSUE);
+  const canAddComment = hasPermission(PERMISSIONS.ADD_COMMENT);
+  const canUploadAttachment = hasPermission(PERMISSIONS.UPLOAD_ATTACHMENT);
+
+  const visibleTabs = ["Report", ...(canViewResolution ? ["Resolution"] : []), "Comments", "Attachments", "Activity"];
 
   const loadIssue = () => api.get(`/issues/${id}`).then((res) => setIssue(res.data)).catch(() => setError("Issue not found"));
   const loadComments = () => api.get(`/issues/${id}/comments`).then((res) => setComments(res.data));
@@ -40,6 +71,7 @@ export default function IssueDetail() {
   const loadActivity = () => api.get(`/issues/${id}/activity`).then((res) => setActivity(res.data));
   const loadUsers = () => api.get("/users").then((res) => setUsers(res.data));
   const loadResolution = () => {
+    if (!canViewResolution) return;
     setResolutionLoading(true);
     setResolutionError("");
     api
@@ -49,6 +81,19 @@ export default function IssueDetail() {
       .finally(() => setResolutionLoading(false));
   };
 
+  const loadRecommendations = () => {
+    if (!canViewDevRecommendation) {
+      setRecommendationsLoading(false);
+      return Promise.resolve();
+    }
+    setRecommendationsLoading(true);
+    return api
+      .get(`/issues/${id}/developer-recommendations`)
+      .then((res) => setRecommendations(res.data))
+      .catch((err) => console.error("Failed to load recommendations:", err))
+      .finally(() => setRecommendationsLoading(false));
+  };
+
   useEffect(() => {
     loadIssue();
     loadComments();
@@ -56,6 +101,7 @@ export default function IssueDetail() {
     loadActivity();
     loadUsers();
     loadResolution();
+    loadRecommendations();
   }, [id]);
 
   const handleRegenerate = async () => {
@@ -90,7 +136,6 @@ export default function IssueDetail() {
 
   const handleDeleteAttachment = async (attachmentId, filename) => {
     if (!window.confirm(`Delete "${filename}"? This cannot be undone.`)) return;
-
     setDeletingAttachmentId(attachmentId);
     try {
       await api.delete(`/issues/${id}/attachments/${attachmentId}`);
@@ -105,7 +150,6 @@ export default function IssueDetail() {
 
   const handleDeleteComment = async (commentId) => {
     if (!window.confirm("Delete this comment? This cannot be undone.")) return;
-
     setDeletingCommentId(commentId);
     try {
       await api.delete(`/issues/${id}/comments/${commentId}`);
@@ -129,11 +173,15 @@ export default function IssueDetail() {
     }
   };
 
-  const handleAssigneeChange = async (e) => {
-    const value = e.target.value;
-    const res = await api.put(`/issues/${id}`, { assignee_id: value ? Number(value) : null });
-    setIssue(res.data);
-    loadActivity();
+  const handleAssigneeChange = async (userId) => {
+    setActionError("");
+    try {
+      const res = await api.put(`/issues/${id}`, { assignee_id: userId ? Number(userId) : null });
+      setIssue(res.data);
+      loadActivity();
+    } catch (err) {
+      setActionError(err.response?.data?.detail || "Could not update assignee");
+    }
   };
 
   const handleDelete = async () => {
@@ -147,7 +195,6 @@ export default function IssueDetail() {
       const response = await api.get(`/issues/${id}/attachments/${attachmentId}/download`, {
         responseType: 'blob'
       });
-
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
@@ -160,10 +207,26 @@ export default function IssueDetail() {
       alert(err.response?.data?.detail || "Error downloading file");
     }
   };
+
+  const handleReanalyze = async () => {
+    setReanalyzing(true);
+    try {
+      await loadRecommendations();
+    } finally {
+      setReanalyzing(false);
+    }
+  };
+
   const [checkedItems, setCheckedItems] = useState(() => {
     const saved = localStorage.getItem(`verification-${id}`);
     return saved ? JSON.parse(saved) : [];
   });
+
+  useEffect(() => {
+    if (!visibleTabs.includes(tab)) {
+      setTab("Report");
+    }
+  }, [visibleTabs, tab]);
 
   if (error) {
     return (
@@ -174,469 +237,452 @@ export default function IssueDetail() {
     return <AppShell><div className="page"><p>Loading...</p></div></AppShell>;
   }
 
-  const reporter = users.find((u) => u.id === issue.reporter_id);
-  const nextStatuses = TRANSITIONS[issue.status] || [];
+const reporter = users.find((u) => u.id === issue.reporter_id);
+const nextStatus = NEXT_STATUS[issue.status];
+const priorityColor = PRIORITY_COLORS[issue.priority] || PRIORITY_COLORS.medium;
+const developerUsers = users.filter((u) => u.role === "developer");  
 
   return (
     <AppShell>
-      <div className="page">
+      <div className="page issue-detail-page">
+        <AiDeveloperPanel
+          recommendations={recommendations}
+          isOpen={showDevRecommendationsModal}
+          onClose={() => setShowDevRecommendationsModal(false)}
+          onAssign={handleAssigneeChange}
+          onReanalyze={handleReanalyze}
+          canAssign={canAssign}
+          reanalyzing={reanalyzing}
+        />
+        {canViewResolution && <BugFlowAiChat issueId={id} />}
+
         <div className="issue-detail-header">
-          <button className="btn btn-outline btn-sm" onClick={() => navigate("/issues")}>
-            ← Back to Issues
-          </button>
-          <button className="btn btn-danger btn-sm" onClick={handleDelete}>🗑 Delete Issue</button>
+        <Link to="/issues" className="back-btn">
+  <span className="back-btn-arrow">←</span> Back to Issues
+</Link>
+          {canDeleteIssue && (
+            <button className="btn btn-danger btn-sm" onClick={handleDelete}>Delete Issue</button>
+          )}
         </div>
 
-        <h2>{issue.title}</h2>
-        <p className="page-subtitle">{issue.description}</p>
-
-        <div className="report-tags">
-          <span className={`priority-badge priority-${issue.priority}`}>{issue.priority}</span>
-          <span className="priority-badge" style={{ background: "#eef1f5", color: "#444" }}>
-            {STATUS_LABELS[issue.status]}
-          </span>
-          {issue.category && <span className="priority-badge" style={{ background: "#e6ecfd", color: "#3450c9" }}>{issue.category}</span>}
-          {issue.component && <span className="priority-badge" style={{ background: "#e8f5e9", color: "#2e7d32" }}>{issue.component}</span>}
-          {issue.defect_type && <span className="priority-badge" style={{ background: "#fff3e0", color: "#e65100" }}>{issue.defect_type}</span>}
-        </div>
-
-        {actionError && <p className="error">{actionError}</p>}
+        {actionError && <div className="alert alert-error">{actionError}</div>}
 
         <div className="issue-detail-layout">
+          {/* MAIN CONTENT */}
           <div className="issue-detail-main">
-            <div className="toolbar" style={{ marginBottom: 0 }}>
-              {TABS.map((t) => (
+            {/* ISSUE CARD */}
+            <div className="issue-card">
+              <div className="issue-card-header">
+                <div className="issue-badge" style={{ backgroundColor: priorityColor.bg }}>
+                  <span style={{ color: priorityColor.color }}>🐛</span>
+                </div>
+                <div className="issue-card-title-section">
+                  <span className="issue-id">BUG-{issue.id}</span>
+                  <h1 className="issue-title">{issue.title}</h1>
+                </div>
+              </div>
+              <p className="issue-description">{issue.description}</p>
+
+              <div className="issue-tags-container">
+                <span className="tag tag-priority" style={{ backgroundColor: priorityColor.bg, color: priorityColor.color }}>
+                  {priorityColor.label}
+                </span>
+                <span className="tag tag-status" style={{ backgroundColor: STATUS_COLORS[issue.status].bg, color: STATUS_COLORS[issue.status].color }}>
+                  {STATUS_LABELS[issue.status].toUpperCase()}
+                </span>
+                {issue.category && <span className="tag tag-category">{issue.category}</span>}
+                {issue.component && <span className="tag tag-component">{issue.component}</span>}
+                {issue.defect_type && <span className="tag tag-defect">{issue.defect_type}</span>}
+              </div>
+            </div>
+
+            {/* TABS */}
+            <div className="tabs-container">
+              {visibleTabs.map((t) => (
                 <button
                   key={t}
-                  className={tab === t ? "btn btn-sm" : "btn btn-outline btn-sm"}
+                  className={`tab ${tab === t ? 'active' : ''}`}
                   onClick={() => setTab(t)}
-                  style={{ flex: "none" }}
                 >
-                  {t}{t === "Comments" && comments.length > 0 ? ` (${comments.length})` : ""}
-                  {t === "Attachments" && attachments.length > 0 ? ` (${attachments.length})` : ""}
+                  {t}
+                  {t === "Comments" && comments.length > 0 && <span className="tab-badge">{comments.length}</span>}
+                  {t === "Attachments" && attachments.length > 0 && <span className="tab-badge">{attachments.length}</span>}
                 </button>
               ))}
             </div>
 
-            <div className="panel" style={{ marginTop: 16 }}>
+            {/* TAB CONTENT */}
+            <div className="tab-content">
               {tab === "Report" && (
-                issue.ai_steps_to_reproduce ? (
-                  <>
-                    {issue.ai_summary && (
-                      <div className="report-section">
-                        <h4>Summary</h4>
-                        <pre>{issue.ai_summary}</pre>
+                <>
+                  {issue.ai_steps_to_reproduce ? (
+                    <div className="report-section-container">
+                      {issue.ai_summary && (
+                        <div className="report-block">
+                          <h3>📋 SUMMARY</h3>
+                          <pre>{issue.ai_summary}</pre>
+                        </div>
+                      )}
+                      <div className="report-block">
+                        <h3>🔧 STEPS TO REPRODUCE</h3>
+                        <pre>{issue.ai_steps_to_reproduce}</pre>
                       </div>
-                    )}
-                    <div className="report-section">
-                      <h4>Steps to Reproduce</h4>
-                      <pre>{issue.ai_steps_to_reproduce}</pre>
-                    </div>
-                    <div className="report-section">
-                      <h4>Expected Result</h4>
-                      <pre>{issue.ai_expected_result}</pre>
-                    </div>
-                    <div className="report-section">
-                      <h4>Actual Result</h4>
-                      <pre>{issue.ai_actual_result}</pre>
-                    </div>
-                    {issue.ai_environment && (
-                      <div className="report-section">
-                        <h4>Environment</h4>
-                        <pre>{issue.ai_environment}</pre>
+                      <div className="report-block">
+                        <h3>✅ EXPECTED RESULT</h3>
+                        <pre>{issue.ai_expected_result}</pre>
                       </div>
-                    )}
-                    {issue.ai_root_cause && (
-                      <div className="report-section">
-                        <h4>Root Cause Analysis</h4>
-                        <pre>{issue.ai_root_cause}</pre>
+                      <div className="report-block">
+                        <h3>❌ ACTUAL RESULT</h3>
+                        <pre>{issue.ai_actual_result}</pre>
                       </div>
-                    )}
-                    <button className="btn btn-outline" onClick={handleRegenerate} disabled={regenerating}>
-                      {regenerating ? "Generating..." : "↻ Regenerate AI Report"}
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <p className="hint">No AI report generated yet for this issue.</p>
-                    <button className="btn" onClick={handleRegenerate} disabled={regenerating}>
-                      {regenerating ? "Generating..." : "✦ Generate AI Report"}
-                    </button>
-                  </>
-                )
+                      {issue.ai_environment && (
+                        <div className="report-block">
+                          <h3>🌍 ENVIRONMENT</h3>
+                          <pre>{issue.ai_environment}</pre>
+                        </div>
+                      )}
+                      {issue.ai_root_cause && (
+                        <div className="report-block">
+                          <h3>🎯 ROOT CAUSE ANALYSIS</h3>
+                          <pre>{issue.ai_root_cause}</pre>
+                        </div>
+                      )}
+                      <button className="btn btn-outline-secondary" onClick={handleRegenerate} disabled={regenerating}>
+                        {regenerating ? "⏳ Generating..." : "🔄 Regenerate AI Report"}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="empty-state">
+                      <p>No AI report generated yet for this issue.</p>
+                      <button className="btn btn-primary" onClick={handleRegenerate} disabled={regenerating}>
+                        {regenerating ? "⏳ Generating..." : "✨ Generate AI Report"}
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
 
               {tab === "Comments" && (
-                <>
-                  <form onSubmit={handleAddComment} style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-                    <input
-                      placeholder="Add a comment..."
-                      value={newComment}
-                      onChange={(e) => setNewComment(e.target.value)}
-                      style={{ flex: 1, padding: 10, border: "1px solid var(--border)", borderRadius: 8 }}
-                    />
-                    <button className="btn" type="submit">Post</button>
-                  </form>
-                  {comments.length === 0 && <p className="hint">No comments yet.</p>}
-                  {comments.map((c) => (
-                    <div className="comment-row" key={c.id}>
-                      <div className="comment-content">
+                <div className="comments-section">
+                  {canAddComment && (
+                    <form onSubmit={handleAddComment} className="comment-form">
+                      <input
+                        placeholder="Add a comment..."
+                        value={newComment}
+                        onChange={(e) => setNewComment(e.target.value)}
+                        className="comment-input"
+                      />
+                      <button className="btn btn-primary" type="submit">Post</button>
+                    </form>
+                  )}
+                  {comments.length === 0 && <p className="empty-hint">No comments yet.</p>}
+                  <div className="comments-list">
+                    {comments.map((c) => (
+                      <div className="comment-item" key={c.id}>
                         <div className="comment-header">
-                          <div className="comment-author">{c.author_username}</div>
-                          <div className="comment-time">{new Date(c.created_at).toLocaleString()}</div>
+                          <strong>{c.author_username}</strong>
+                          <span className="comment-time">{new Date(c.created_at).toLocaleString()}</span>
                         </div>
-                        <p className="comment-text">{c.content}</p>
+                        <p className="comment-content">{c.content}</p>
+                        <button
+                          className="btn btn-danger btn-sm"
+                          onClick={() => handleDeleteComment(c.id)}
+                          disabled={deletingCommentId === c.id}
+                        >
+                          {deletingCommentId === c.id ? "..." : "Delete"}
+                        </button>
                       </div>
-                      <button
-                        className="btn btn-danger btn-sm comment-delete-btn"
-                        onClick={() => handleDeleteComment(c.id)}
-                        disabled={deletingCommentId === c.id}
-                        title="Delete comment"
-                      >
-                        {deletingCommentId === c.id ? "..." : "Delete"}
-                      </button>
-                    </div>
-                  ))}
-                </>
+                    ))}
+                  </div>
+                </div>
               )}
 
               {tab === "Attachments" && (
-                <>
-                  <label className="btn btn-outline" style={{ display: "inline-block", marginBottom: 16, cursor: "pointer" }}>
-                    + Upload File
-                    <input type="file" onChange={handleUpload} style={{ display: "none" }} />
-                  </label>
-                  {attachments.length === 0 && <p className="hint">No attachments yet.</p>}
-                  {attachments.map((a) => (
-                    <div className="attachment-row" key={a.id}>
-                      <div className="attachment-content">
+                <div className="attachments-section">
+                  {canUploadAttachment && (
+                    <label className="btn btn-outline-secondary" style={{ cursor: "pointer" }}>
+                      📎 Upload File
+                      <input type="file" onChange={handleUpload} style={{ display: "none" }} />
+                    </label>
+                  )}
+                  {attachments.length === 0 && <p className="empty-hint">No attachments yet.</p>}
+                  <div className="attachments-list">
+                    {attachments.map((a) => (
+                      <div className="attachment-item" key={a.id}>
                         <button
                           onClick={() => handleDownloadAttachment(a.id, a.filename)}
-                          className="attachment-link"
-                          title="Download file"
+                          className="attachment-name"
                         >
                           📎 {a.filename}
                         </button>
-                        <div className="attachment-meta">
-                          {(a.size_bytes / 1024).toFixed(1)} KB • {new Date(a.created_at).toLocaleString()}
-                        </div>
+                        <span className="attachment-meta">{(a.size_bytes / 1024).toFixed(1)} KB</span>
+                        <button
+                          className="btn btn-danger btn-sm"
+                          onClick={() => handleDeleteAttachment(a.id, a.filename)}
+                          disabled={deletingAttachmentId === a.id}
+                        >
+                          {deletingAttachmentId === a.id ? "..." : "Delete"}
+                        </button>
                       </div>
-                      <button
-                        className="btn btn-danger btn-sm attachment-delete-btn"
-                        onClick={() => handleDeleteAttachment(a.id, a.filename)}
-                        disabled={deletingAttachmentId === a.id}
-                        title="Delete attachment"
-                      >
-                        {deletingAttachmentId === a.id ? "..." : "Delete"}
-                      </button>
-                    </div>
-                  ))}
-                </>
+                    ))}
+                  </div>
+                </div>
               )}
 
               {tab === "Activity" && (
-                <>
-                  {activity.length === 0 && <p className="hint">No activity yet.</p>}
-                  {activity.map((a) => (
-                    <div className="activity-row" key={a.id}>
-                      <div className="activity-content">
+                <div className="activity-section">
+                  {activity.length === 0 && <p className="empty-hint">No activity yet.</p>}
+                  <div className="activity-list">
+                    {activity.map((a) => (
+                      <div className="activity-item" key={a.id}>
                         <div className="activity-header">
-                          <div className="activity-user">{a.username}</div>
-                          <div className="activity-time">{new Date(a.created_at).toLocaleString()}</div>
+                          <strong>{a.username}</strong>
+                          <span className="activity-time">{new Date(a.created_at).toLocaleString()}</span>
                         </div>
                         <div className="activity-action">{a.action.replace(/_/g, " ")}</div>
                         {a.detail && <p className="activity-detail">{a.detail}</p>}
                       </div>
-                    </div>
-                  ))}
-                </>
+                    ))}
+                  </div>
+                </div>
               )}
 
-              {tab === "Resolution" && (
-                resolutionLoading ? (
-                  <p className="hint">Loading resolution assistance...</p>
-                ) : resolutionError ? (
-                  <p className="error">{resolutionError}</p>
-                ) : resolution ? (
-                  <div className="resolution-panel">
-                    {/* Header */}
-                    <div className="resolution-header">
-                      <div className="resolution-header-content">
-                        <h3>🤖 AI Resolution Assistant</h3>
-                        <p>AI-generated insights to help you investigate and resolve this issue faster.</p>
+              {tab === "Resolution" && canViewResolution && (
+                <>
+                  {resolutionLoading ? (
+                    <p className="loading-hint">Loading resolution assistance...</p>
+                  ) : resolutionError ? (
+                    <p className="error">{resolutionError}</p>
+                  ) : resolution ? (
+                    <div className="resolution-panel">
+                      {/* Header */}
+                      <div className="resolution-header">
+                        <div>
+                          <h3>🤖 AI Resolution Assistant</h3>
+                          <p>AI-generated insights to help you investigate and resolve this issue faster.</p>
+                        </div>
+                        <button className="btn btn-sm btn-outline-secondary" onClick={loadResolution} disabled={resolutionLoading}>
+                          🔄 Regenerate
+                        </button>
                       </div>
-                      <button className="btn btn-sm btn-outline" onClick={loadResolution} disabled={resolutionLoading}>
-                        🔄 Regenerate
-                      </button>
-                    </div>
 
-                    {/* Stats Grid */}
-                    <div className="resolution-stats-grid">
-                      <div className="stat-card">
-                        <div className="stat-icon">📊</div>
-                        <div className="stat-info">
-                          <div className="stat-label">Confidence</div>
-                          <div className="stat-value">{resolution.confidence_score}%</div>
+                      {/* Stats Grid */}
+                      <div className="stats-grid">
+                        <div className="stat-card">
+                          <div className="stat-icon">📊</div>
+                          <div className="stat-info">
+                            <div className="stat-label">Confidence</div>
+                            <div className="stat-value">{resolution.confidence_score}%</div>
+                          </div>
+                        </div>
+                        <div className="stat-card">
+                          <div className="stat-icon">🧩</div>
+                          <div className="stat-info">
+                            <div className="stat-label">Impact Areas</div>
+                            <div className="stat-value-sm">{resolution.impact_area.join(", ")}</div>
+                          </div>
+                        </div>
+                        <div className="stat-card">
+                          <div className="stat-icon">⏱</div>
+                          <div className="stat-info">
+                            <div className="stat-label">Est. Effort</div>
+                            <div className="stat-value-sm">{resolution.estimated_effort}</div>
+                          </div>
                         </div>
                       </div>
-                      <div className="stat-card">
-                        <div className="stat-icon">🧩</div>
-                        <div className="stat-info">
-                          <div className="stat-label">Impact Areas</div>
-                          <div className="stat-value-sm">{resolution.impact_area.join(", ")}</div>
-                        </div>
-                      </div>
-                      <div className="stat-card">
-                        <div className="stat-icon">⏱</div>
-                        <div className="stat-info">
-                          <div className="stat-label">Est. Effort</div>
-                          <div className="stat-value-sm">{resolution.estimated_effort}</div>
-                        </div>
-                      </div>
-                    </div>
 
-                    {/* Root Cause Hypotheses */}
-                    <div className="resolution-section">
-                      <div className="section-header">
-                        <span className="section-icon">🎯</span>
-                        <h4>Root Cause Hypotheses</h4>
-                      </div>
-                      <div className="hypothesis-list">
+                      {/* Root Cause Hypotheses */}
+                      <div className="resolution-section">
+                        <div className="section-title">🎯 Root Cause Hypotheses</div>
                         {resolution.root_cause_hypotheses.map((h, i) => (
-                          <div key={i} className="hypothesis-item">
-                            <div className="hypothesis-number">{i + 1}</div>
-                            <div className="hypothesis-content">
-                              <span className="hypothesis-text">{h.hypothesis}</span>
+                          <div key={i} className="hypothesis">
+                            <span className="hypothesis-num">{i + 1}</span>
+                            <div>
+                              <p>{h.hypothesis}</p>
                               <span className="confidence-badge">{h.confidence}%</span>
                             </div>
                           </div>
                         ))}
                       </div>
-                    </div>
 
-                    {/* Investigation Areas */}
-                    <div className="resolution-section">
-                      <div className="section-header">
-                        <span className="section-icon">🔍</span>
-                        <h4>Investigation Areas</h4>
-                      </div>
-                      <div className="investigation-list">
+                      {/* Investigation Areas */}
+                      <div className="resolution-section">
+                        <div className="section-title">🔍 Investigation Areas</div>
                         {resolution.investigation_areas.map((a, i) => (
-                          <div key={i} className="investigation-item">
-                            <div className="investigation-number">{i + 1}</div>
-                            <div className="investigation-content">
-                              <div className="investigation-title">{a.area}</div>
-                              <div className="investigation-detail">{a.detail}</div>
+                          <div key={i} className="investigation">
+                            <span className="inv-num">{i + 1}</span>
+                            <div>
+                              <h4>{a.area}</h4>
+                              <p>{a.detail}</p>
                             </div>
                           </div>
                         ))}
                       </div>
-                    </div>
 
-                    {/* Code Areas */}
-                    <div className="resolution-section">
-                      <div className="section-header">
-                        <span className="section-icon">🧑‍💻</span>
-                        <h4>Suggested Code Areas</h4>
-                      </div>
-                      <div className="code-areas-container">
-                        {resolution.suggested_code_areas.frontend.length > 0 && (
-                          <div className="code-area-box">
-                            <div className="code-area-header">Frontend</div>
-                            <div className="code-area-list">
+                      {/* Code Areas */}
+                      <div className="resolution-section">
+                        <div className="section-title">🧑‍💻 Suggested Code Areas</div>
+                        <div className="code-areas">
+                          {resolution.suggested_code_areas.frontend.length > 0 && (
+                            <div className="code-area">
+                              <h4>Frontend</h4>
                               {resolution.suggested_code_areas.frontend.map((f, i) => (
-                                <div key={i} className="code-area-item">• {f}</div>
+                                <p key={i}>• {f}</p>
                               ))}
                             </div>
-                          </div>
-                        )}
-                        {resolution.suggested_code_areas.backend.length > 0 && (
-                          <div className="code-area-box">
-                            <div className="code-area-header">Backend</div>
-                            <div className="code-area-list">
+                          )}
+                          {resolution.suggested_code_areas.backend.length > 0 && (
+                            <div className="code-area">
+                              <h4>Backend</h4>
                               {resolution.suggested_code_areas.backend.map((f, i) => (
-                                <div key={i} className="code-area-item">• {f}</div>
+                                <p key={i}>• {f}</p>
                               ))}
                             </div>
-                          </div>
-                        )}
-                        {resolution.suggested_code_areas.api.length > 0 && (
-                          <div className="code-area-box">
-                            <div className="code-area-header">API</div>
-                            <div className="code-area-list">
+                          )}
+                          {resolution.suggested_code_areas.api.length > 0 && (
+                            <div className="code-area">
+                              <h4>API</h4>
                               {resolution.suggested_code_areas.api.map((f, i) => (
-                                <div key={i} className="code-area-item">• {f}</div>
+                                <p key={i}>• {f}</p>
                               ))}
                             </div>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Debugging Steps */}
-                    <div className="resolution-section">
-                      <div className="section-header">
-                        <span className="section-icon">🐞</span>
-                        <h4>Debugging Steps</h4>
-                      </div>
-                      <div className="debugging-list">
+                      {/* Debugging Steps */}
+                      <div className="resolution-section">
+                        <div className="section-title">🐞 Debugging Steps</div>
                         {resolution.debugging_steps.map((s, i) => (
-                          <div key={i} className="debugging-item">
-                            <div className="debugging-number">{i + 1}</div>
-                            <div className="debugging-content">
-                              <div className="debugging-title">{s.step}</div>
-                              <div className="debugging-detail">{s.detail}</div>
+                          <div key={i} className="debug-step">
+                            <span className="debug-num">{i + 1}</span>
+                            <div>
+                              <h4>{s.step}</h4>
+                              <p>{s.detail}</p>
                             </div>
                           </div>
                         ))}
                       </div>
-                    </div>
 
-                    {/* Mismatch Alert */}
-                    {resolution.detected_mismatch && (
-                      <div className="resolution-section alert-section">
-                        <div className="section-header">
-                          <span className="section-icon">⚠️</span>
-                          <h4>Detected Mismatch</h4>
-                        </div>
-                        <div className="mismatch-card">
-                          <div className="mismatch-row">
-                            <span className="mismatch-label">Expected:</span>
-                            <strong className="mismatch-value">{resolution.detected_mismatch.expected}</strong>
-                          </div>
-                          <div className="mismatch-row">
-                            <span className="mismatch-label">Actual:</span>
-                            <strong className="mismatch-value">{resolution.detected_mismatch.actual}</strong>
-                          </div>
-                          <div className="mismatch-note">
-                            <strong>Likely issue:</strong> {resolution.detected_mismatch.likely_issue}
-                          </div>
-                        </div>
+                      {/* Possible Resolution */}
+                      <div className="resolution-section highlight">
+                        <div className="section-title">💡 Possible Resolution</div>
+                        <div className="solution">{resolution.possible_resolution}</div>
                       </div>
-                    )}
 
-                    {/* Similar Defects */}
-                    <div className="resolution-section">
-                      <div className="section-header">
-                        <span className="section-icon">🔗</span>
-                        <h4>Similar Defects</h4>
-                      </div>
-                      {resolution.similar_defects.length === 0 ? (
-                        <p className="hint">No similar defects found.</p>
-                      ) : (
-                        <div className="similar-defects-list">
-                          {resolution.similar_defects.map((d) => (
-                            <div key={d.issue_id} className="defect-item">
-                              <span className="defect-id">BUG-{d.issue_id}</span>
-                              <span className="defect-title">{d.title}</span>
-                            </div>
+                      {/* Verification Checklist */}
+                      <div className="resolution-section">
+                        <div className="section-title">🧪 Verification Checklist</div>
+                        <div className="checklist">
+                          {resolution.verification_checklist.map((c, i) => (
+                            <label key={i} className="checklist-item">
+                              <input
+                                type="checkbox"
+                                checked={checkedItems.includes(i)}
+                                onChange={(e) => {
+                                  const updated = e.target.checked
+                                    ? [...checkedItems, i]
+                                    : checkedItems.filter((index) => index !== i);
+                                  setCheckedItems(updated);
+                                  localStorage.setItem(`verification-${id}`, JSON.stringify(updated));
+                                }}
+                              />
+                              <span>{c}</span>
+                            </label>
                           ))}
                         </div>
-                      )}
-                    </div>
-
-                    {/* Previous Resolution */}
-                    {resolution.previous_resolution && (
-                      <div className="resolution-section">
-                        <div className="section-header">
-                          <span className="section-icon">📝</span>
-                          <h4>Previous Resolution</h4>
-                        </div>
-                        <pre className="code-block">{resolution.previous_resolution}</pre>
-                      </div>
-                    )}
-
-                    {/* Possible Resolution */}
-                    <div className="resolution-section resolution-highlight">
-                      <div className="section-header">
-                        <span className="section-icon">💡</span>
-                        <h4>Possible Resolution</h4>
-                      </div>
-
-                      <div className="solution-content">
-                        {resolution.possible_resolution}
                       </div>
                     </div>
-
-                    {/* Verification Checklist */}
-                    <div className="resolution-section">
-                      <div className="section-header">
-                        <span className="section-icon">🧪</span>
-                        <h4>Verification Checklist</h4>
-                      </div>
-                      <div className="checklist">
-                        {resolution.verification_checklist.map((c, i) => (
-                          <label key={i} className="checklist-item">
-                      <input
-                        type="checkbox"
-                        checked={checkedItems.includes(i)}
-                        onChange={(e) => {
-                        const updated = e.target.checked
-                        ? [...checkedItems, i]
-                        : checkedItems.filter((index) => index !== i);
-
-                        setCheckedItems(updated);
-                        localStorage.setItem(
-                        `verification-${id}`,
-                        JSON.stringify(updated)
-                         );
-                         }}
-                        />
-
-                        <span>{c}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="hint">No resolution assistance generated yet.</p>
-                )
+                  ) : (
+                    <p className="empty-hint">No resolution assistance generated yet.</p>
+                  )}
+                </>
               )}
             </div>
           </div>
 
-          <aside className="issue-detail-sidebar">
-            <div className="sidebar-section">
-              <div className="sidebar-section-title">Workflow Status Actions</div>
-              {nextStatuses.map((s) => (
-                <button key={s} className="workflow-btn" onClick={() => handleTransition(s)}>
-                  Transition to {STATUS_LABELS[s]}
-                  <span className="check">✓</span>
+          {/* RIGHT SIDEBAR */}
+          <aside className="issue-sidebar">
+            {/* WORKFLOW STATUS ACTIONS */}
+            {canChangeStatus && (
+            <div className="sidebar-card workflow-card">
+              <h3 className="card-title">Workflow Status Actions</h3>
+              {nextStatus ? (
+                <div className="workflow-buttons">
+                  <button
+                    className="workflow-btn"
+                    onClick={() => handleTransition(nextStatus)}
+                  >
+                    Transition to {STATUS_LABELS[nextStatus]}
+                    <span className="check-icon">✓</span>
+                  </button>
+                </div>
+              ) : (
+                <p className="hint">No further transitions available.</p>
+              )}
+            </div>
+          )}
+
+            {/* ASSIGNED TO */}
+          <div className="sidebar-card assigned-card">
+            <h3 className="card-title">ASSIGNED TO</h3>
+            {canAssign ? (
+              <select
+                value={issue.assignee_id || ""}
+                onChange={(e) => handleAssigneeChange(e.target.value)}
+                className="metadata-select assign-select"
+              >
+                <option value="">Unassigned</option>
+                {developerUsers.map((u) => (      // ← changed
+                  <option key={u.id} value={u.id}>{u.username}</option>
+                ))}
+              </select>
+            ) : (
+              <div className="metadata-value">
+                {users.find((u) => u.id === issue.assignee_id)?.username || "Unassigned"}
+              </div>
+            )}
+
+              {/* AI Recommend Developer Button */}
+              {canViewDevRecommendation && recommendations && (
+                <button
+                  className="btn btn-recommend-dev"
+                  onClick={() => setShowDevRecommendationsModal(true)}
+                >
+                  <span className="recommend-icon">🤖</span>
+                  <span>AI Recommend Developer</span>
+                  <span className="recommend-arrow">+</span>
                 </button>
-              ))}
-              {nextStatuses.length === 0 && <p className="hint" style={{ fontSize: 12, margin: 0 }}>No further transitions available.</p>}
+              )}
             </div>
 
-            <div className="sidebar-section">
-              <div className="sidebar-field">
-                <label>Assigned To</label>
-                <select value={issue.assignee_id || ""} onChange={handleAssigneeChange}>
-                  <option value="">Unassigned</option>
-                  {users.map((u) => (
-                    <option key={u.id} value={u.id}>{u.username}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="sidebar-field">
-                <label>Reporter</label>
-                <div className="value">{reporter?.username || "—"}</div>
-              </div>
-              <div className="sidebar-field">
-                <label>Category</label>
-                <div className="value">{issue.category || "—"}</div>
-              </div>
-              <div className="sidebar-field">
-                <label>Module / Component</label>
-                <div className="value">{issue.component || "—"}</div>
-              </div>
-              <div className="sidebar-field">
-                <label>Defect Type</label>
-                <div className="value">{issue.defect_type || "—"}</div>
-              </div>
-              <div className="sidebar-field">
-                <label>Reported On</label>
-                <div className="value-muted">{new Date(issue.created_at).toLocaleString()}</div>
+            {/* ISSUE METADATA */}
+            <div className="sidebar-card metadata-card">
+              <div className="metadata">
+                <div className="metadata-field">
+                  <label>REPORTER</label>
+                  <div className="metadata-value">{reporter?.username || "—"}</div>
+                </div>
+
+                <div className="metadata-field">
+                  <label>CATEGORY</label>
+                  <div className="metadata-value">{issue.category || "—"}</div>
+                </div>
+
+                <div className="metadata-field">
+                  <label>MODULE / COMPONENT</label>
+                  <div className="metadata-value">{issue.component || "—"}</div>
+                </div>
+
+                <div className="metadata-field">
+                  <label>DEFECT TYPE</label>
+                  <div className="metadata-value">{issue.defect_type || "—"}</div>
+                </div>
+
+                <div className="metadata-field">
+                  <label>REPORTED ON</label>
+                  <div className="metadata-value-muted">{new Date(issue.created_at).toLocaleString()}</div>
+                </div>
               </div>
             </div>
           </aside>
@@ -644,96 +690,307 @@ export default function IssueDetail() {
       </div>
 
       <style jsx>{`
-        /* ===== ATTACHMENT STYLES ===== */
-        .attachment-row {
+        /* PAGE LAYOUT */
+        .issue-detail-page {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+
+        .issue-detail-header {
           display: flex;
           justify-content: space-between;
-          align-items: flex-start;
-          gap: 12px;
-          padding: 12px;
-          border: 1px solid var(--border);
-          border-radius: 8px;
+          align-items: center;
           margin-bottom: 8px;
-          background-color: #fafafa;
-          transition: all 0.2s ease;
         }
 
-        .attachment-row:hover {
-          background-color: #f5f5f5;
-          border-color: #ddd;
+        .back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  color: #5b3df5;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.back-btn:hover {
+  background: #f5f1ff;
+  border-color: #d8cffe;
+}
+
+.back-btn-arrow {
+  font-size: 14px;
+}
+        /* ISSUE CARD */
+        .issue-card {
+          background: white;
+          border: 1px solid #e5e7eb;
+          border-radius: 12px;
+          padding: 20px;
+          margin-bottom: 16px;
         }
 
-        .attachment-content {
+        .issue-card-header {
+          display: flex;
+          gap: 16px;
+          align-items: flex-start;
+          margin-bottom: 16px;
+        }
+
+        .issue-badge {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 52px;
+          height: 52px;
+          border-radius: 12px;
+          font-size: 24px;
+          flex-shrink: 0;
+          background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+        }
+
+        .issue-card-title-section {
           flex: 1;
-          min-width: 0;
         }
 
-        .attachment-link {
+        .issue-id {
           display: inline-block;
+          background: #ede9fe;
+          color: #5b3df5;
+          font-size: 11px;
+          font-weight: 700;
+          padding: 4px 10px;
+          border-radius: 4px;
+          margin-bottom: 8px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        .issue-title {
+          margin: 0;
+          font-size: 28px;
+          font-weight: 700;
+          color: #111;
+          line-height: 1.3;
+        }
+
+        .issue-description {
+          margin: 12px 0 16px 0;
+          color: #666;
+          font-size: 14px;
+          line-height: 1.5;
+        }
+
+        /* TAGS */
+        .issue-tags-container {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+
+        .tag {
+          display: inline-block;
+          padding: 6px 12px;
+          border-radius: 6px;
+          font-size: 11px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        .tag-priority {
+          background: #fef3c7;
+          color: #b45309;
+        }
+
+        .tag-status {
+          background: #dbeafe;
+          color: #0369a1;
+        }
+
+        .tag-category {
+          background: #c7d2fe;
+          color: #3730a3;
+        }
+
+        .tag-component {
+          background: #dcfce7;
+          color: #166534;
+        }
+
+        .tag-defect {
+          background: #fed7aa;
+          color: #92400e;
+        }
+
+        /* LAYOUT */
+        .issue-detail-layout {
+          display: grid;
+          grid-template-columns: 1fr 380px;
+          gap: 20px;
+        }
+
+        @media (max-width: 1200px) {
+          .issue-detail-layout {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        /* MAIN CONTENT */
+        .issue-detail-main {
+          display: flex;
+          flex-direction: column;
+          gap: 0;
+        }
+
+        /* TABS */
+        .tabs-container {
+          display: flex;
+          gap: 0;
+          border-bottom: 2px solid #e5e7eb;
+          margin-bottom: 0;
+          background: white;
+          border-radius: 12px 12px 0 0;
+        }
+
+        .tab {
           background: none;
           border: none;
-          color: var(--maroon);
-          text-decoration: none;
-          font-weight: 500;
-          word-break: break-word;
-          transition: color 0.2s ease;
-          cursor: pointer;
-          padding: 0;
-          font: inherit;
-          text-align: left;
-        }
-
-        .attachment-link:hover {
-          color: #c41e3a;
-          text-decoration: underline;
-        }
-
-        .attachment-link:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-
-        .attachment-meta {
-          font-size: 12px;
-          color: #666;
-          margin-top: 4px;
-        }
-
-        .attachment-delete-btn {
-          flex-shrink: 0;
-          padding: 6px 12px;
+          padding: 14px 16px;
           font-size: 13px;
-          font-weight: 500;
-          min-width: auto;
-        }
-
-        .attachment-delete-btn:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-
-        /* ===== COMMENT STYLES ===== */
-        .comment-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          gap: 12px;
-          padding: 12px;
-          border: 1px solid var(--border);
-          border-radius: 8px;
-          margin-bottom: 8px;
-          background-color: #fafafa;
+          font-weight: 600;
+          color: #666;
+          cursor: pointer;
+          border-bottom: 3px solid transparent;
+          margin-bottom: -2px;
+          position: relative;
           transition: all 0.2s ease;
         }
 
-        .comment-row:hover {
-          background-color: #f5f5f5;
-          border-color: #ddd;
+        .tab:hover {
+          color: #333;
+          background: #fafafa;
         }
 
-        .comment-content {
+        .tab.active {
+          color: #5b3df5;
+          border-bottom-color: #5b3df5;
+        }
+
+        .tab-badge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          margin-left: 6px;
+          font-size: 11px;
+          font-weight: 700;
+          color: #5b3df5;
+          background: #ede9fe;
+          padding: 2px 6px;
+          border-radius: 10px;
+        }
+
+        /* TAB CONTENT */
+        .tab-content {
+          padding: 24px;
+          background: white;
+          border-radius: 0 0 12px 12px;
+          border: 1px solid #e5e7eb;
+          border-top: none;
+        }
+
+        /* REPORT */
+        .report-section-container {
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+        }
+
+        .report-block {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+
+        .report-block h3 {
+          margin: 0;
+          font-size: 11px;
+          font-weight: 700;
+          color: #5b3df5;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        .report-block pre {
+          margin: 0;
+          padding: 12px;
+          background: #f9f8fc;
+          border: 1px solid #ede9fe;
+          border-radius: 6px;
+          font-size: 13px;
+          line-height: 1.6;
+          overflow-x: auto;
+          white-space: pre-wrap;
+          word-wrap: break-word;
+          color: #333;
+        }
+
+        .empty-state {
+          text-align: center;
+          padding: 60px 20px;
+          color: #999;
+        }
+
+        .empty-state p {
+          font-size: 14px;
+          margin-bottom: 16px;
+        }
+
+        .empty-hint {
+          text-align: center;
+          color: #999;
+          font-size: 14px;
+          padding: 40px 20px;
+        }
+
+        /* COMMENTS */
+        .comments-section {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+
+        .comment-form {
+          display: flex;
+          gap: 8px;
+        }
+
+        .comment-input {
           flex: 1;
-          min-width: 0;
+          padding: 10px 12px;
+          border: 1px solid #e5e7eb;
+          border-radius: 6px;
+          font-size: 14px;
+          font-family: inherit;
+        }
+
+        .comments-list {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+
+        .comment-item {
+          padding: 12px;
+          background: #fafafa;
+          border: 1px solid #e5e7eb;
+          border-radius: 6px;
         }
 
         .comment-header {
@@ -744,116 +1001,99 @@ export default function IssueDetail() {
           gap: 12px;
         }
 
-        .comment-author {
-          font-weight: 600;
-          color: var(--text-primary);
-        }
-
         .comment-time {
           font-size: 12px;
-          color: #666;
+          color: #999;
           white-space: nowrap;
         }
 
-        .comment-text {
-          margin: 0;
-          color: var(--text-primary);
+        .comment-content {
+          margin: 0 0 8px 0;
+          color: #333;
           line-height: 1.5;
         }
 
-        .comment-delete-btn {
-          flex-shrink: 0;
-          padding: 6px 12px;
-          font-size: 13px;
-          font-weight: 500;
-          min-width: auto;
-        }
-
-        .comment-delete-btn:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-
-        /* ===== ACTIVITY STYLES ===== */
-        .activity-row {
+        /* ATTACHMENTS */
+        .attachments-section,
+        .activity-section {
           display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
+          flex-direction: column;
+          gap: 16px;
+        }
+
+        .attachments-list,
+        .activity-list {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+
+        .attachment-item {
+          display: flex;
+          align-items: center;
           gap: 12px;
           padding: 12px;
-          border: 1px solid var(--border);
-          border-radius: 8px;
-          margin-bottom: 8px;
-          background-color: #fafafa;
-          transition: all 0.2s ease;
+          background: #fafafa;
+          border: 1px solid #e5e7eb;
+          border-radius: 6px;
         }
 
-        .activity-row:hover {
-          background-color: #f5f5f5;
-          border-color: #ddd;
-        }
-
-        .activity-content {
+        .attachment-name {
           flex: 1;
-          min-width: 0;
+          background: none;
+          border: none;
+          color: #5b3df5;
+          cursor: pointer;
+          text-align: left;
+          font-size: 14px;
+          font-weight: 600;
+        }
+
+        .attachment-name:hover {
+          text-decoration: underline;
+        }
+
+        .attachment-meta {
+          font-size: 12px;
+          color: #999;
+        }
+
+        /* ACTIVITY */
+        .activity-item {
+          padding: 12px;
+          background: #fafafa;
+          border: 1px solid #e5e7eb;
+          border-radius: 6px;
         }
 
         .activity-header {
           display: flex;
           justify-content: space-between;
-          align-items: center;
-          margin-bottom: 8px;
-          gap: 12px;
-        }
-
-        .activity-user {
-          font-weight: 600;
-          color: var(--text-primary);
+          margin-bottom: 6px;
         }
 
         .activity-time {
           font-size: 12px;
-          color: #666;
-          white-space: nowrap;
+          color: #999;
         }
 
         .activity-action {
-          font-weight: 500;
+          font-weight: 600;
           color: #333;
-          margin-bottom: 4px;
+          font-size: 13px;
         }
 
         .activity-detail {
           margin: 4px 0 0 0;
-          font-size: 13px;
+          font-size: 12px;
           color: #666;
-          font-style: italic;
         }
 
-        /* ===== BUTTON STYLES ===== */
-        .btn-danger {
-          background-color: #ffe6e6;
-          color: #d9001b;
-          border: 1px solid #ffcccc;
-          font-weight: 700;
-        }
-
-        .btn-danger:hover:not(:disabled) {
-          background-color: #ffcccc;
-          border-color: #ff9999;
-          color: #b30015;
-        }
-
-        .btn-danger:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-
-        /* ===== RESOLUTION PANEL STYLES ===== */
+        /* RESOLUTION */
         .resolution-panel {
           display: flex;
           flex-direction: column;
-          gap: 24px;
+          gap: 20px;
         }
 
         .resolution-header {
@@ -864,26 +1104,24 @@ export default function IssueDetail() {
           padding: 16px;
           background: linear-gradient(135deg, #f5f1ff 0%, #ede9fe 100%);
           border: 1px solid #e2dbfc;
-          border-radius: 12px;
+          border-radius: 8px;
         }
 
-        .resolution-header-content h3 {
-          margin: 0 0 6px 0;
-          font-size: 18px;
+        .resolution-header h3 {
+          margin: 0 0 4px 0;
           color: #5b3df5;
+          font-size: 14px;
         }
 
-        .resolution-header-content p {
+        .resolution-header p {
           margin: 0;
           font-size: 13px;
           color: #666;
-          line-height: 1.4;
         }
 
-        /* Stats Grid */
-        .resolution-stats-grid {
+        .stats-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+          grid-template-columns: repeat(3, 1fr);
           gap: 12px;
         }
 
@@ -894,30 +1132,22 @@ export default function IssueDetail() {
           padding: 12px;
           background: #f9f8fc;
           border: 1px solid #ede9fe;
-          border-radius: 10px;
+          border-radius: 8px;
         }
 
         .stat-icon {
           font-size: 20px;
-          flex-shrink: 0;
-        }
-
-        .stat-info {
-          flex: 1;
-          min-width: 0;
         }
 
         .stat-label {
           font-size: 11px;
-          font-weight: 600;
+          font-weight: 700;
           color: #999;
           text-transform: uppercase;
-          letter-spacing: 0.5px;
-          margin-bottom: 4px;
         }
 
         .stat-value {
-          font-size: 22px;
+          font-size: 20px;
           font-weight: 700;
           color: #5b3df5;
         }
@@ -926,334 +1156,176 @@ export default function IssueDetail() {
           font-size: 12px;
           font-weight: 600;
           color: #333;
-          line-height: 1.3;
         }
 
-        /* Resolution Sections */
         .resolution-section {
           padding: 16px;
           background: #fafbfc;
-          border: 1px solid var(--border);
-          border-radius: 10px;
+          border: 1px solid #e5e7eb;
+          border-radius: 8px;
         }
 
-        .resolution-section.alert-section {
-          background: #fffbf0;
-          border-color: #fae8d5;
-        }
-
-        .resolution-section.resolution-highlight {
+        .resolution-section.highlight {
           background: #f0f9f3;
-          border: 1px solid #d0ecc9;
+          border-color: #d0ecc9;
         }
 
-        .section-header {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          margin-bottom: 14px;
-          padding-bottom: 12px;
-          border-bottom: 2px solid rgba(91, 61, 245, 0.1);
-        }
-
-        .section-icon {
-          font-size: 18px;
-          flex-shrink: 0;
-        }
-
-        .section-header h4 {
-          margin: 0;
-          font-size: 14px;
+        .section-title {
           font-weight: 700;
           color: #333;
+          margin-bottom: 12px;
+          font-size: 14px;
         }
 
-        /* Hypothesis List */
-        .hypothesis-list {
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-        }
-
-        .hypothesis-item {
+        .hypothesis {
           display: flex;
           gap: 12px;
-          align-items: flex-start;
+          margin-bottom: 10px;
+          padding-bottom: 10px;
+          border-bottom: 1px solid #eee;
         }
 
-        .hypothesis-number {
+        .hypothesis:last-child {
+          border-bottom: none;
+        }
+
+        .hypothesis-num {
           display: flex;
           align-items: center;
           justify-content: center;
-          min-width: 28px;
-          height: 28px;
+          min-width: 24px;
+          height: 24px;
           background: #ede9fe;
           border-radius: 50%;
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 700;
           color: #5b3df5;
           flex-shrink: 0;
         }
 
-        .hypothesis-content {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 12px;
-          flex: 1;
-          padding: 8px 0;
-        }
-
-        .hypothesis-text {
+        .hypothesis p {
+          margin: 0;
           font-size: 13px;
           color: #333;
         }
 
         .confidence-badge {
+          display: inline-block;
           background: #ede9fe;
           color: #5b3df5;
           font-size: 11px;
           font-weight: 700;
           padding: 3px 8px;
-          border-radius: 4px;
-          white-space: nowrap;
-          flex-shrink: 0;
+          border-radius: 3px;
+          margin-top: 4px;
         }
 
-        /* Investigation List */
-        .investigation-list {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-        }
-
-        .investigation-item {
+        .investigation {
           display: flex;
           gap: 12px;
+          margin-bottom: 14px;
         }
 
-        .investigation-number {
+        .inv-num {
           display: flex;
           align-items: center;
           justify-content: center;
-          min-width: 28px;
-          height: 28px;
-          background: #e3f2fd;
+          min-width: 24px;
+          height: 24px;
+          background: #dbeafe;
           border-radius: 50%;
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 700;
-          color: #1976d2;
+          color: #1e40af;
           flex-shrink: 0;
           margin-top: 2px;
         }
 
-        .investigation-content {
-          flex: 1;
-          min-width: 0;
-        }
-
-        .investigation-title {
+        .investigation h4 {
+          margin: 0 0 4px 0;
+          font-size: 13px;
           font-weight: 600;
           color: #333;
-          font-size: 13px;
-          margin-bottom: 4px;
         }
 
-        .investigation-detail {
+        .investigation p {
+          margin: 0;
           font-size: 12px;
           color: #666;
-          line-height: 1.4;
         }
 
-        /* Code Areas */
-        .code-areas-container {
+        .code-areas {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+          grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
           gap: 12px;
         }
 
-        .code-area-box {
+        .code-area {
+          padding: 12px;
           background: white;
           border: 1px solid #e5e5e5;
-          border-radius: 8px;
-          padding: 12px;
-          transition: all 0.2s ease;
+          border-radius: 6px;
         }
 
-        .code-area-box:hover {
-          border-color: #d0d0d0;
-          background: #fafbfc;
-        }
-
-        .code-area-header {
+        .code-area h4 {
+          margin: 0 0 8px 0;
           font-size: 11px;
           font-weight: 700;
           color: #5b3df5;
           text-transform: uppercase;
-          letter-spacing: 0.5px;
-          margin-bottom: 10px;
-          padding-bottom: 8px;
-          border-bottom: 2px solid #ede9fe;
         }
 
-        .code-area-list {
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-        }
-
-        .code-area-item {
+        .code-area p {
+          margin: 0 0 4px 0;
           font-size: 12px;
           color: #333;
-          line-height: 1.3;
         }
 
-        /* Debugging Steps */
-        .debugging-list {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-        }
-
-        .debugging-item {
+        .debug-step {
           display: flex;
           gap: 12px;
+          margin-bottom: 14px;
         }
 
-        .debugging-number {
+        .debug-num {
           display: flex;
           align-items: center;
           justify-content: center;
-          min-width: 28px;
-          height: 28px;
+          min-width: 24px;
+          height: 24px;
           background: #fce4ec;
           border-radius: 50%;
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 700;
           color: #c2185b;
           flex-shrink: 0;
           margin-top: 2px;
         }
 
-        .debugging-content {
-          flex: 1;
-          min-width: 0;
-        }
-
-        .debugging-title {
+        .debug-step h4 {
+          margin: 0 0 4px 0;
+          font-size: 13px;
           font-weight: 600;
           color: #333;
-          font-size: 13px;
-          margin-bottom: 4px;
         }
 
-        .debugging-detail {
-          font-size: 12px;
-          color: #666;
-          line-height: 1.4;
-        }
-
-        /* Mismatch Card */
-        .mismatch-card {
-          background: white;
-          padding: 12px;
-          border-radius: 8px;
-          border-left: 4px solid #f59e0b;
-        }
-
-        .mismatch-row {
-          display: flex;
-          gap: 12px;
-          font-size: 13px;
-          margin-bottom: 8px;
-        }
-
-        .mismatch-row:last-child {
-          margin-bottom: 0;
-        }
-
-        .mismatch-label {
-          font-weight: 600;
-          color: #666;
-          min-width: 80px;
-        }
-
-        .mismatch-value {
-          color: #333;
-          font-family: monospace;
-          font-size: 12px;
-        }
-
-        .mismatch-note {
-          margin-top: 10px;
-          padding-top: 10px;
-          border-top: 1px solid #f0e8d8;
-          font-size: 12px;
-          color: #7a5c00;
-          line-height: 1.4;
-        }
-
-        /* Similar Defects */
-        .similar-defects-list {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
-
-        .defect-item {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 10px;
-          background: white;
-          border: 1px solid #e5e5e5;
-          border-radius: 8px;
-          transition: all 0.2s ease;
-        }
-
-        .defect-item:hover {
-          background: #fafbfc;
-          border-color: #d0d0d0;
-        }
-
-        .defect-id {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          min-width: 60px;
-          padding: 4px 8px;
-          background: #ede9fe;
-          color: #5b3df5;
-          border-radius: 6px;
-          font-size: 11px;
-          font-weight: 700;
-          flex-shrink: 0;
-        }
-
-        .defect-title {
-          font-size: 13px;
-          color: #333;
-          flex: 1;
-          min-width: 0;
-        }
-
-        /* Code Block */
-        .code-block {
+        .debug-step p {
           margin: 0;
+          font-size: 12px;
+          color: #666;
+        }
+
+        .solution {
           padding: 12px;
           background: white;
-          border: 1px solid #e5e5e5;
-          border-radius: 8px;
-          font-size: 12px;
+          border-radius: 6px;
+          font-size: 13px;
           line-height: 1.5;
           color: #333;
-          overflow-x: auto;
-          font-family: 'Monaco', 'Courier New', monospace;
-          max-height: 300px;
-          overflow-y: auto;
+          white-space: pre-wrap;
+          word-wrap: break-word;
         }
 
-        /* Checklist */
         .checklist {
           display: flex;
           flex-direction: column;
@@ -1267,37 +1339,245 @@ export default function IssueDetail() {
           font-size: 13px;
           color: #333;
           cursor: pointer;
-          user-select: none;
         }
 
-        .checklist-item input[type="checkbox"] {
+        .checklist-item input {
           width: 18px;
           height: 18px;
           cursor: pointer;
           accent-color: #5b3df5;
-          flex-shrink: 0;
         }
 
-        .checklist-item input[type="checkbox"]:checked + span {
+        .checklist-item input:checked + span {
           color: #999;
           text-decoration: line-through;
         }
 
-        .checklist-item span {
+        /* SIDEBAR */
+        .issue-sidebar {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+
+        .sidebar-card {
+          background: white;
+          border: 1px solid #e5e7eb;
+          border-radius: 12px;
+          padding: 16px;
+        }
+
+        .workflow-card {
+          order: -1;
+        }
+
+        .assigned-card {
+          order: 0;
+        }
+
+        .metadata-card {
+          order: 2;
+        }
+
+        .card-title {
+          margin: 0 0 12px 0;
+          font-size: 10px;
+          font-weight: 700;
+          color: #999;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        /* WORKFLOW */
+        .workflow-buttons {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+
+        .workflow-btn {
+          padding: 12px 14px;
+          background: #5b3df5;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
           transition: all 0.2s ease;
         }
-        .solution-content {
-  margin-top: 20px;
-  padding: 0;
 
-  font-size: 14px;
-  line-height: 1.5;
-  font-weight: 400;
-  color: #444;
+        .workflow-btn:hover {
+          background: #4c2dd4;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(91, 61, 245, 0.2);
+        }
 
-  white-space: normal;
-  overflow-wrap: break-word;
+        .check-icon {
+          font-size: 16px;
+        }
+
+        /* ASSIGNED TO */
+        .metadata-select {
+          width: 100%;
+          padding: 10px 12px;
+          border: 1px solid #e5e7eb;
+          border-radius: 8px;
+          font-size: 13px;
+          background: white;
+          cursor: pointer;
+          font-family: inherit;
+          margin-bottom: 12px;
+        }
+
+        .metadata-value {
+          font-size: 13px;
+          color: #333;
+          font-weight: 500;
+          margin-bottom: 12px;
+        }
+
+        /* AI RECOMMEND DEVELOPER BUTTON */
+      .btn-recommend-dev {
+        width: 100%;
+        padding: 12px 14px;
+        background: #5b3df5;
+        color: white;
+        border: 2px solid #5b3df5;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        transition: all 0.2s ease;
+        font-family: inherit;
 }
+
+        .btn-recommend-dev:hover {
+        background: #4c2dd4;
+        border-color: #4c2dd4;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(91, 61, 245, 0.25);
+}
+
+        .recommend-icon {
+          font-size: 14px;
+        }
+
+        .recommend-arrow {
+          font-size: 16px;
+          font-weight: 700;
+        }
+
+        /* METADATA */
+        .metadata {
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+        }
+
+        .metadata-field {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .metadata-field label {
+          font-size: 10px;
+          font-weight: 700;
+          color: #999;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        .metadata-value-muted {
+          font-size: 13px;
+          color: #999;
+        }
+
+        .hint {
+          text-align: center;
+          color: #999;
+          font-size: 13px;
+          padding: 20px;
+          margin: 0;
+        }
+
+        .alert {
+          padding: 12px 14px;
+          border-radius: 8px;
+          font-size: 13px;
+          margin-bottom: 16px;
+        }
+
+        .alert-error {
+          background: #fee2e2;
+          color: #b91c1c;
+          border: 1px solid #fecaca;
+        }
+
+        /* BUTTON STYLES */
+        .btn {
+          padding: 10px 16px;
+          border-radius: 8px;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          border: none;
+          transition: all 0.2s ease;
+          font-family: inherit;
+        }
+
+        .btn-primary {
+          background: #5b3df5;
+          color: white;
+        }
+
+        .btn-primary:hover {
+          background: #4c2dd4;
+        }
+
+        .btn-outline-secondary {
+          background: white;
+          color: #333;
+          border: 1px solid #e5e7eb;
+        }
+
+        .btn-outline-secondary:hover {
+          background: #fafafa;
+          border-color: #d1d5db;
+        }
+
+        .btn-danger {
+          background: #ef4444;
+          color: white;
+        }
+
+        .btn-danger:hover {
+          background: #dc2626;
+        }
+
+        .btn-sm {
+          padding: 6px 12px;
+          font-size: 12px;
+        }
+
+        .loading-hint {
+          text-align: center;
+          color: #999;
+          font-size: 14px;
+          padding: 40px 20px;
+        }
+
+        .error {
+          color: #d9001b;
+        }
       `}</style>
     </AppShell>
   );
