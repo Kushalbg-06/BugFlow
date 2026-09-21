@@ -687,7 +687,7 @@ html { scroll-behavior: smooth; }
     flex-wrap: wrap;
   }
 }
-
+/* --- Additions for AppShell profile block + topbar logout --- */
 .topbar-right { display: flex; align-items: center; gap: 16px; }
 
 .sidebar-profile {
@@ -833,7 +833,7 @@ html { scroll-behavior: smooth; }
 .quick-action-row:hover { background: var(--bg-muted-hover); }
 .quick-action-row.danger { color: var(--danger); }
 
-
+/* --- Avatar photo-edit badge --- */
 .avatar-edit-badge {
   position: absolute;
   bottom: -2px;
@@ -850,7 +850,7 @@ html { scroll-behavior: smooth; }
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
-/* --- Dashboard v--- */
+/* --- Dashboard v2 --- */
 .dashboard-quad-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -876,10 +876,7 @@ html { scroll-behavior: smooth; }
   border-radius: 6px;
   transition: width 0.3s ease;
 }
-
-
-
-   .app-shell {
+.app-shell {
     height: 100vh;
     overflow: hidden;
   }
@@ -1019,7 +1016,6 @@ html { scroll-behavior: smooth; }
 }
 .btn-nav-login:hover { background: var(--bg-muted); color: var(--maroon); }
 
-
 .landing-hero-v2 {
   position: relative;
   overflow: hidden;
@@ -1071,7 +1067,6 @@ html { scroll-behavior: smooth; }
 }
 
 .btn-demo { display: inline-flex; align-items: center; gap: 6px; }
-
 
 .hero-preview-wrap {
   position: relative;
@@ -1250,7 +1245,6 @@ html { scroll-behavior: smooth; }
 }
 .mini-progress-label { color: var(--text-muted); font-size: 8.5px; }
 
-
 .quick-feature-strip {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -1337,7 +1331,6 @@ html { scroll-behavior: smooth; }
   color: white;
 }
 
-/* Hero "View Demo" — real outlined button box (not plain link text) */
 .btn-view-demo {
   display: inline-flex;
   align-items: center;

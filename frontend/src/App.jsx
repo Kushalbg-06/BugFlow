@@ -10,6 +10,10 @@ import IssueForm from "./pages/IssueForm";
 import IssueDetail from "./pages/IssueDetail";
 import Sprints from "./pages/Sprints";
 import Profile from "./pages/Profile";
+import Analytics from "./pages/Analytics";
+import Users from "./pages/Users";
+import ProtectedRoute from "./components/ProtectedRoute";
+import { PERMISSIONS } from "./auth/permissions";
 
 function PrivateRoute({ children }) {
   const { isAuthenticated } = useAuth();
@@ -28,12 +32,23 @@ function AppRoutes() {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+      <Route
+        path="/analytics"
+        element={<ProtectedRoute permission={PERMISSIONS.VIEW_ANALYTICS}><Analytics /></ProtectedRoute>}
+      />
       <Route path="/projects" element={<PrivateRoute><Projects /></PrivateRoute>} />
       <Route path="/issues" element={<PrivateRoute><Issues /></PrivateRoute>} />
-      <Route path="/create-issue" element={<PrivateRoute><IssueForm /></PrivateRoute>} />
+      <Route
+        path="/create-issue"
+        element={<ProtectedRoute permission={PERMISSIONS.CREATE_ISSUE}><IssueForm /></ProtectedRoute>}
+      />
       <Route path="/issues/:id/report" element={<PrivateRoute><IssueDetail /></PrivateRoute>} />
       <Route path="/sprints" element={<PrivateRoute><Sprints /></PrivateRoute>} />
       <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
+      <Route
+        path="/users"
+        element={<ProtectedRoute permission={PERMISSIONS.MANAGE_USERS}><Users /></ProtectedRoute>}
+      />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
@@ -46,4 +61,3 @@ export default function App() {
     </AuthProvider>
   );
 }
-
