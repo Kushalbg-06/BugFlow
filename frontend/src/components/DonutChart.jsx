@@ -3,7 +3,6 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 
 const DEFAULT_COLORS = ["#6366f1", "#3b82f6", "#22c55e", "#f97316", "#d1d5db", "#eab308"];
 
-// data: [{ label, count, percentage }]
 export default function DonutChart({ title, data, colors = DEFAULT_COLORS }) {
   return (
     <div className="analytics-card">

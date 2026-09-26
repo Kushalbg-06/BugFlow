@@ -297,7 +297,6 @@
   .dashboard .issue-table .mono { color: var(--maroon); font-weight: 600; white-space: nowrap; }
   .dashboard .issue-table .muted { color: var(--text-muted); }
   .dashboard .issue-table .nowrap { white-space: nowrap; }
-  /* single-line truncation so a long title/project name never grows the row height */
   .dashboard .issue-table .truncate {
     white-space: nowrap;
     overflow: hidden;

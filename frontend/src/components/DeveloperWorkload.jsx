@@ -1,9 +1,7 @@
 import React from "react";
 
-// distinct color per developer row, cycling through this palette
 const DEV_COLORS = ["#6366f1", "#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7", "#ec4899"];
 
-// data: [{ developer_name, open_count, in_progress_count, resolved_count, workload_percentage }]
 export default function DeveloperWorkload({ data }) {
   return (
     <div className="analytics-card">

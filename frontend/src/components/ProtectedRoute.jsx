@@ -1,11 +1,6 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-/**
- * <ProtectedRoute permission="MANAGE_USERS"><Users /></ProtectedRoute>
- * <ProtectedRoute role="admin"><Users /></ProtectedRoute>       // role-based alt
- * <ProtectedRoute permission="MANAGE_USERS" role="admin">...    // both checked
- */
 export default function ProtectedRoute({ children, permission, role }) {
   const { isAuthenticated, hasPermission, hasRole, loading } = useAuth();
 

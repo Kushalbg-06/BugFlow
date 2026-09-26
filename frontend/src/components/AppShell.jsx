@@ -22,14 +22,12 @@ export default function AppShell({ children }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
-  // Just flips a data-theme attribute + remembers the choice. See the note
-  // at the bottom of the CSS file about what this does and doesn't affect.
+
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("bugflow-theme", theme);
   }, [theme]);
 
-  // Close the profile dropdown on any click outside it.
   useEffect(() => {
     function handleClickOutside(e) {
       if (menuRef.current && !menuRef.current.contains(e.target)) {

@@ -58,7 +58,6 @@ export function AuthProvider({ children }) {
 
   const isAuthenticated = !!user;
 
-  // NEW: permission helpers, bound to the current role
   const hasPermission = (permission) => checkPermission(role, permission);
   const hasRole = (...roles) => checkRole(role, ...roles);
 

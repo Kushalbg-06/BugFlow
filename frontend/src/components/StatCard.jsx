@@ -1,9 +1,5 @@
 import React from "react";
 
-/**
- * icon: any react node (e.g. lucide-react icon)
- * accent: "default" | "orange" | "green" | "blue"  -> tints the card background
- */
 const ACCENT_BG = {
   default: "#ffffff",
   orange: "#fef3e2",

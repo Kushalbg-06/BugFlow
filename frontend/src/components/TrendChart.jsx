@@ -3,7 +3,6 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 
-// data: [{ date, total, open, resolved }]
 export default function TrendChart({ data }) {
   return (
     <div className="analytics-card">
