@@ -316,18 +316,6 @@ AI-generated recommendations assist users in managing issues more effectively. F
 
 ---
 
-🔮 Future Enhancements
-
-- Real-time notifications using WebSockets.
-- Advanced project analytics and dashboards.
-- GitHub integration for issue and pull request tracking.
-- Docker-based deployment.
-- CI/CD pipeline integration.
-- Advanced semantic duplicate detection using vector databases.
-- AI-powered debugging assistance.
-
----
-
 👨‍💻 Author
 
 Kushal B G
